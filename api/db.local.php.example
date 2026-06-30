@@ -1,0 +1,7 @@
+<?php
+
+// Copy this file to db.local.php and set your database credentials.
+$db_host = '127.0.0.1';
+$db_name = 'one8_estimates';
+$db_user = 'root';
+$db_pass = '';

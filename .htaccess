@@ -1,0 +1,6 @@
+AuthType Basic
+AuthName "Estimate Access"
+AuthUserFile "C:/xampp/htdocs/Estimate/.htpasswd"
+Require valid-user
+
+DirectoryIndex index.php index.html

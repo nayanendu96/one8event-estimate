@@ -1,0 +1,23 @@
+# Local database credentials (copy from db.local.php.example)
+api/db.local.php
+
+# Database dumps and exports
+*.sql
+*.sql.gz
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# HTTP basic auth passwords (create locally from .htpasswd.example)
+.htpasswd
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/
