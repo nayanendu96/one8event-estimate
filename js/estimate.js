@@ -1017,8 +1017,11 @@
         if (state === 'hidden' || state === 'idle') {
             el.classList.add('is-hidden');
             el.textContent = '';
+            el.setAttribute('aria-hidden', 'true');
             return;
         }
+
+        el.removeAttribute('aria-hidden');
 
         if (state === 'saving') {
             el.classList.add('is-saving');

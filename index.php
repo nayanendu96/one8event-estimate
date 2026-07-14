@@ -254,7 +254,7 @@ function renderEstimateGroup(array $categories, $isManager = false)
                     <a class="estimateActionBtn" href="estimates.php">All Estimates</a>
                     <?php endif; ?>
                 </div>
-                <div class="estimateSaveStatus is-hidden no-print" role="status" aria-live="polite"></div>
+                <div class="estimateSaveStatus is-hidden no-print" role="status" aria-live="polite" aria-hidden="true"></div>
             </div>
             <div class="hdClm02">
                 <span class="tclr01">ONE</span><span class="tclr02">8</span> EVENT
