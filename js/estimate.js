@@ -1275,14 +1275,16 @@
         }
 
         table.querySelectorAll('tr.item-row').forEach(function (row) {
-            if (!row._selectedItem) {
+            var rateInput = row.querySelector('.itemRateInput');
+
+            if (!rateInput) {
                 return;
             }
 
-            var rateInput = row.querySelector('.itemRateInput');
+            var catalogRate = row._selectedItem ? getActiveItemRate(row._selectedItem) : '';
 
-            if (rateInput) {
-                rateInput.value = getActiveItemRate(row._selectedItem);
+            if (catalogRate !== '') {
+                rateInput.value = catalogRate;
             }
 
             calculateRowAmount(row);
@@ -1406,8 +1408,13 @@
 
         var row = input.closest('tr.item-row');
 
-        if (row) {
-            row._selectedItem = null;
+        if (row && row._selectedItem) {
+            var linkedName = String(row._selectedItem.item_name || '').toUpperCase();
+            var currentName = String(input.value || '').toUpperCase();
+
+            if (currentName !== linkedName) {
+                row._selectedItem = null;
+            }
         }
 
         activeSuggestInput = input;

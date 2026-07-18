@@ -129,6 +129,11 @@ function estimate_fetch_catalog_item($conn, int $itemId): ?array
         return null;
     }
 
+    return estimate_normalize_catalog_item_row($row);
+}
+
+function estimate_normalize_catalog_item_row(array $row): array
+{
     return [
         'id' => (int) $row['id'],
         'item_name' => (string) $row['item_name'],
@@ -136,6 +141,61 @@ function estimate_fetch_catalog_item($conn, int $itemId): ?array
         'b2b_rate' => (string) $row['b2b_rate'],
         'd2c_rate' => (string) $row['d2c_rate'],
     ];
+}
+
+function estimate_fetch_catalog_item_by_name($conn, string $itemName): ?array
+{
+    $itemName = trim($itemName);
+
+    if ($itemName === '' || !$conn) {
+        return null;
+    }
+
+    estimate_ensure_item_table($conn);
+
+    $stmt = $conn->prepare(
+        'SELECT id, item_name, unit, b2b_rate, d2c_rate
+         FROM estimate_item
+         WHERE UPPER(item_name) = UPPER(?) AND is_hidden = 0
+         LIMIT 1'
+    );
+
+    if (!$stmt) {
+        return null;
+    }
+
+    $stmt->bind_param('s', $itemName);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    if (!$row) {
+        return null;
+    }
+
+    return estimate_normalize_catalog_item_row($row);
+}
+
+function estimate_resolve_catalog_item(array $item, $conn): ?array
+{
+    $selectedItem = $item['selectedItem'] ?? null;
+
+    if (is_array($selectedItem) && !empty($selectedItem['id'])) {
+        $catalogItem = estimate_fetch_catalog_item($conn, (int) $selectedItem['id']);
+
+        if ($catalogItem) {
+            return $catalogItem;
+        }
+    }
+
+    $itemName = trim((string) ($item['name'] ?? ''));
+
+    if ($itemName !== '') {
+        return estimate_fetch_catalog_item_by_name($conn, $itemName);
+    }
+
+    return null;
 }
 
 function estimate_get_catalog_rate(array $catalogItem, string $rateMode): string
@@ -149,18 +209,18 @@ function estimate_get_catalog_rate(array $catalogItem, string $rateMode): string
 
 function estimate_resolve_item_rate(array $incomingItem, ?array $existingItem, string $rateMode, $conn): string
 {
-    $selectedItem = $incomingItem['selectedItem'] ?? null;
+    $catalogItem = estimate_resolve_catalog_item($incomingItem, $conn);
 
-    if (is_array($selectedItem) && !empty($selectedItem['id'])) {
-        $catalogItem = estimate_fetch_catalog_item($conn, (int) $selectedItem['id']);
-
-        if ($catalogItem) {
-            return estimate_get_catalog_rate($catalogItem, $rateMode);
-        }
+    if ($catalogItem) {
+        return estimate_get_catalog_rate($catalogItem, $rateMode);
     }
 
     if (is_array($existingItem) && array_key_exists('rate', $existingItem)) {
-        return (string) $existingItem['rate'];
+        $existingRate = trim((string) $existingItem['rate']);
+
+        if ($existingRate !== '') {
+            return $existingRate;
+        }
     }
 
     return '';
@@ -197,16 +257,10 @@ function estimate_rebuild_financial_fields(array $incoming, ?array $existing, $c
                 ? $existingItems[$itemIndex]
                 : null;
 
-            $selectedItem = $item['selectedItem'] ?? null;
+            $catalogItem = estimate_resolve_catalog_item($item, $conn);
 
-            if (is_array($selectedItem) && !empty($selectedItem['id'])) {
-                $catalogItem = estimate_fetch_catalog_item($conn, (int) $selectedItem['id']);
-
-                if ($catalogItem) {
-                    $item['selectedItem'] = $catalogItem;
-                } elseif (is_array($existingItem['selectedItem'] ?? null)) {
-                    $item['selectedItem'] = $existingItem['selectedItem'];
-                }
+            if ($catalogItem) {
+                $item['selectedItem'] = $catalogItem;
             } elseif (is_array($existingItem['selectedItem'] ?? null)) {
                 $item['selectedItem'] = $existingItem['selectedItem'];
             }

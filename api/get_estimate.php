@@ -41,9 +41,9 @@ $stmt->execute();
 $result = $stmt->get_result();
 $row = $result ? $result->fetch_assoc() : null;
 $stmt->close();
-$conn->close();
 
 if (!$row) {
+    $conn->close();
     http_response_code(404);
     echo json_encode(['error' => 'Estimate not found']);
     exit;
@@ -54,7 +54,11 @@ $data = is_array($decoded) ? $decoded : [];
 
 if (estimate_is_manager()) {
     $data = estimate_strip_financial_fields($data);
+} elseif (!empty($data)) {
+    $data = estimate_rebuild_financial_fields($data, $data, $conn);
 }
+
+$conn->close();
 
 echo json_encode([
     'success' => true,

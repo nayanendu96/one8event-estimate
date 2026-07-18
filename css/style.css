@@ -196,6 +196,30 @@ button.estimateActionBtn {
   background: #ff5400;
   color: #ffffff;
 }
+.estimateListPhoneInput {
+  width: 120px;
+  max-width: 100%;
+  border: 1px solid #ccc;
+  padding: 4px 6px;
+  font-size: 13px;
+  border-radius: 3px;
+}
+.estimateListPhoneInput:focus {
+  border-color: #0066ff;
+  outline: none;
+}
+.estimateListPhoneInput.is-saving {
+  border-color: #999;
+  background: #f9f9f9;
+}
+.estimateListPhoneInput.is-saved {
+  border-color: #4bae4f;
+  background: #effff0;
+}
+.estimateListPhoneInput.is-error {
+  border-color: #d93025;
+  background: #fff5f5;
+}
 .estimateOpenLink {
   color: #0066ff;
   text-transform: uppercase;
