@@ -355,7 +355,24 @@ function estimate_ensure_table($conn)
 
     estimate_ensure_edit_lock_columns($conn);
 
+    $listPhoneCheck = $conn->query("SHOW COLUMNS FROM estimates LIKE 'list_phone'");
+
+    if ($listPhoneCheck && $listPhoneCheck->num_rows === 0) {
+        $conn->query('ALTER TABLE estimates ADD COLUMN list_phone VARCHAR(32) DEFAULT NULL AFTER project_type');
+    }
+
     return true;
+}
+
+function estimate_extract_project_owner($dataJson): string
+{
+    $data = json_decode((string) $dataJson, true);
+
+    if (!is_array($data)) {
+        return '';
+    }
+
+    return trim((string) ($data['header']['projectOwner'] ?? ''));
 }
 
 function estimate_ensure_item_table($conn)

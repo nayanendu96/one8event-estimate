@@ -62,7 +62,9 @@ if ($categoryResult) {
     }
 }
 
-if ($isManager && !empty($estimateData)) {
+if (!$isManager && !empty($estimateData)) {
+    $estimateData = estimate_rebuild_financial_fields($estimateData, $estimateData, $conn);
+} elseif ($isManager && !empty($estimateData)) {
     $estimateData = estimate_strip_financial_fields($estimateData);
 }
 

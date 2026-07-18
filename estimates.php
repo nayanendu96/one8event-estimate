@@ -17,7 +17,7 @@ estimate_ensure_table($conn);
 
 $estimates = [];
 $result = $conn->query(
-    'SELECT id, company_name, project_type, grand_total, is_locked, created_at, updated_at
+    'SELECT id, company_name, project_type, list_phone, data, grand_total, is_locked, created_at, updated_at
      FROM estimates
      WHERE is_deleted = 0
      ORDER BY updated_at DESC'
@@ -57,6 +57,8 @@ $conn->close();
                 <thead>
                     <tr>
                         <th>Company</th>
+                        <th>Project Owner</th>
+                        <th>Phone</th>
                         <th>Project Type</th>
                         <th>Grand Total</th>
                         <th>Status</th>
@@ -69,6 +71,8 @@ $conn->close();
                 <tbody>
                     <?php foreach ($estimates as $estimate) :
                         $company = trim((string) $estimate['company_name']);
+                        $projectOwner = estimate_extract_project_owner($estimate['data'] ?? '');
+                        $listPhone = trim((string) ($estimate['list_phone'] ?? ''));
                         $projectType = trim((string) $estimate['project_type']);
                         $grandTotal = (float) $estimate['grand_total'];
                         $isLocked = (int) $estimate['is_locked'] === 1;
@@ -76,6 +80,18 @@ $conn->close();
                         ?>
                         <tr>
                             <td><?php echo $company !== '' ? htmlspecialchars($company, ENT_QUOTES, 'UTF-8') : '—'; ?></td>
+                            <td><?php echo $projectOwner !== '' ? htmlspecialchars($projectOwner, ENT_QUOTES, 'UTF-8') : '—'; ?></td>
+                            <td>
+                                <input
+                                    type="text"
+                                    class="estimateListPhoneInput"
+                                    data-id="<?php echo $id; ?>"
+                                    value="<?php echo htmlspecialchars($listPhone, ENT_QUOTES, 'UTF-8'); ?>"
+                                    placeholder="Add phone"
+                                    maxlength="32"
+                                    autocomplete="off"
+                                >
+                            </td>
                             <td><?php echo $projectType !== '' ? htmlspecialchars($projectType, ENT_QUOTES, 'UTF-8') : '—'; ?></td>
                             <td><?php echo number_format($grandTotal, 0, '.', ','); ?></td>
                             <td>
@@ -168,6 +184,57 @@ $conn->close();
             }).catch(function () {
                 window.prompt('Copy this URL:', url);
             });
+        });
+    });
+
+    document.querySelectorAll('.estimateListPhoneInput').forEach(function (input) {
+        var lastSaved = input.value;
+
+        function savePhone() {
+            var id = input.getAttribute('data-id');
+            var phone = input.value.trim();
+
+            if (phone === lastSaved) {
+                return;
+            }
+
+            input.classList.remove('is-saved', 'is-error');
+            input.classList.add('is-saving');
+
+            fetch('api/update_list_phone.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id, phone: phone })
+            }).then(function (response) {
+                return response.json().then(function (data) {
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Save failed');
+                    }
+                    return data;
+                });
+            }).then(function () {
+                lastSaved = phone;
+                input.classList.remove('is-saving');
+                input.classList.add('is-saved');
+                window.setTimeout(function () {
+                    input.classList.remove('is-saved');
+                }, 1500);
+            }).catch(function () {
+                input.classList.remove('is-saving');
+                input.classList.add('is-error');
+                input.value = lastSaved;
+                window.setTimeout(function () {
+                    input.classList.remove('is-error');
+                }, 2000);
+            });
+        }
+
+        input.addEventListener('blur', savePhone);
+        input.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                input.blur();
+            }
         });
     });
 })();
