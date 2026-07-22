@@ -207,26 +207,83 @@ function estimate_get_catalog_rate(array $catalogItem, string $rateMode): string
     return (string) ($catalogItem['b2b_rate'] ?? '');
 }
 
-function estimate_resolve_item_rate(array $incomingItem, ?array $existingItem, string $rateMode, $conn): string
+function estimate_get_stored_item_rate(array $item, ?array $existingItem, string $rateMode): string
 {
-    $catalogItem = estimate_resolve_catalog_item($incomingItem, $conn);
+    $sources = [$item];
 
-    if ($catalogItem) {
-        return estimate_get_catalog_rate($catalogItem, $rateMode);
+    if (is_array($existingItem)) {
+        $sources[] = $existingItem;
     }
 
-    if (is_array($existingItem) && array_key_exists('rate', $existingItem)) {
-        $existingRate = trim((string) $existingItem['rate']);
+    foreach ($sources as $source) {
+        $selectedItem = $source['selectedItem'] ?? null;
 
-        if ($existingRate !== '') {
-            return $existingRate;
+        if (!is_array($selectedItem)) {
+            continue;
+        }
+
+        $modeRate = estimate_get_catalog_rate($selectedItem, $rateMode);
+
+        if ($modeRate !== '') {
+            return $modeRate;
+        }
+    }
+
+    foreach ($sources as $source) {
+        if (!array_key_exists('rate', $source)) {
+            continue;
+        }
+
+        $rate = trim((string) $source['rate']);
+
+        if ($rate !== '') {
+            return $rate;
         }
     }
 
     return '';
 }
 
-function estimate_rebuild_financial_fields(array $incoming, ?array $existing, $conn): array
+function estimate_preserve_selected_item(array $item, ?array $existingItem, ?array $catalogItem): ?array
+{
+    if (is_array($item['selectedItem'] ?? null) && $item['selectedItem'] !== []) {
+        return $item['selectedItem'];
+    }
+
+    if (is_array($existingItem['selectedItem'] ?? null) && $existingItem['selectedItem'] !== []) {
+        return $existingItem['selectedItem'];
+    }
+
+    return $catalogItem;
+}
+
+function estimate_resolve_item_rate(
+    array $incomingItem,
+    ?array $existingItem,
+    string $rateMode,
+    $conn,
+    bool $freezeRates = false
+): string {
+    $storedRate = estimate_get_stored_item_rate($incomingItem, $existingItem, $rateMode);
+
+    if ($storedRate !== '') {
+        return $storedRate;
+    }
+
+    if ($freezeRates) {
+        return '';
+    }
+
+    $catalogItem = estimate_resolve_catalog_item($incomingItem, $conn);
+
+    if ($catalogItem) {
+        return estimate_get_catalog_rate($catalogItem, $rateMode);
+    }
+
+    return '';
+}
+
+function estimate_rebuild_financial_fields(array $incoming, ?array $existing, $conn, bool $freezeRates = false): array
 {
     $merged = $incoming;
     $rateMode = isset($incoming['rateMode']) && $incoming['rateMode'] === 'd2c' ? 'd2c' : 'b2b';
@@ -258,14 +315,15 @@ function estimate_rebuild_financial_fields(array $incoming, ?array $existing, $c
                 : null;
 
             $catalogItem = estimate_resolve_catalog_item($item, $conn);
+            $item['selectedItem'] = estimate_preserve_selected_item($item, $existingItem, $catalogItem);
 
-            if ($catalogItem) {
-                $item['selectedItem'] = $catalogItem;
-            } elseif (is_array($existingItem['selectedItem'] ?? null)) {
-                $item['selectedItem'] = $existingItem['selectedItem'];
-            }
-
-            $item['rate'] = estimate_resolve_item_rate($item, $existingItem, $rateMode, $conn);
+            $item['rate'] = estimate_resolve_item_rate(
+                $item,
+                $existingItem,
+                $rateMode,
+                $conn,
+                $freezeRates
+            );
             $merged['groups'][$groupIndex]['items'][$itemIndex] = $item;
         }
     }

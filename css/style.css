@@ -91,16 +91,24 @@ a {text-decoration:none;}
   align-items: center;
   gap: 6px;
 }
-.estimateIconForm {
+.estimateIconForm,
+.estimateIconWrap {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin: 0;
   vertical-align: middle;
+  line-height: 0;
 }
 .estimateIconBtn {
-  display: inline-block;
-  width: 28px;
-  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
   padding: 0;
+  margin: 0;
   border: 1px solid #000;
   border-radius: 4px;
   background-color: #ffffff;
@@ -108,10 +116,68 @@ a {text-decoration:none;}
   background-position: center;
   background-size: 16px;
   cursor: pointer;
-  font-size: 0;
-  line-height: 0;
+  font-size: 14px;
+  line-height: 1;
   vertical-align: middle;
   flex-shrink: 0;
+  box-sizing: border-box;
+  text-decoration: none;
+  color: inherit;
+  overflow: hidden;
+}
+button.estimateIconBtn {
+  appearance: none;
+  -webkit-appearance: none;
+}
+a.estimateIconBtn {
+  color: inherit;
+}
+.estimatesRowActionsInner .fa-solid {
+  font-family: "Font Awesome 6 Free", Arial, sans-serif;
+  font-weight: 900;
+}
+.estimateIconBtn i {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 13px;
+  line-height: 1;
+  pointer-events: none;
+  font-style: normal;
+}
+.estimateIconBtn.is-copy-url {
+  display: inline-grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  place-items: center;
+  background-color: #eef4ff;
+  background-image: none;
+  color: #0066ff;
+}
+.estimateIconBtn.is-copy-url i {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+}
+.estimateIconBtn .estimateIconCheck {
+  display: none;
+}
+.estimateIconBtn.is-copy-url.is-copied {
+  background-color: #effff0;
+  color: #4bae4f;
+}
+.estimateIconBtn.is-copy-url.is-copied .estimateIconDefault {
+  display: none;
+}
+.estimateIconBtn.is-copy-url.is-copied .estimateIconCheck {
+  display: flex;
+}
+.estimateIconBtn:not(:has(i)) {
+  font-size: 0;
+  line-height: 0;
 }
 .estimateIconBtn.is-print {
   background-color: #fff7f0;
@@ -119,15 +185,31 @@ a {text-decoration:none;}
 }
 .estimateIconBtn.is-lock {
   background-color: #fff0f0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d8000a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 1 1 8 0v3'/%3E%3C/svg%3E");
+  background-image: none;
+  color: #d8000a;
 }
 .estimateIconBtn.is-unlock {
   background-color: #effff0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234bae4f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 7.5-1.5'/%3E%3C/svg%3E");
+  background-image: none;
+  color: #4bae4f;
 }
 .estimateIconBtn.is-delete {
   background-color: #fff0f0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d8000a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M8 6V4h8v2'/%3E%3Cpath d='M6 6l1 14h10l1-14'/%3E%3Cpath d='M10 11v6'/%3E%3Cpath d='M14 11v6'/%3E%3C/svg%3E");
+  background-image: none;
+  color: #d8000a;
+}
+.estimateIconBtn.is-open {
+  background-color: #eef4ff;
+  background-image: none;
+  color: #0066ff;
+}
+a.estimateIconBtn.is-open {
+  color: #0066ff;
+}
+.estimateIconBtn.is-copy-estimate {
+  background-color: #eef4ff;
+  background-image: none;
+  color: #0066ff;
 }
 .estimateIconBtn:hover {
   opacity: 0.85;
@@ -162,6 +244,23 @@ button.estimateActionBtn {
 }
 .estimatesPage {
   padding: 20px 10px 40px;
+}
+.estimatesPage--manager .estimatesTable--manager {
+  max-width: 720px;
+}
+.estimatesPage--manager .estimateIconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 32px;
+  padding: 0 8px;
+  gap: 4px;
+}
+.estimatesPage--manager .managerEstimateActionLabel {
+  font-size: 12px;
+  line-height: 1;
+  pointer-events: none;
 }
 .estimatesHeader {
   display: flex;
@@ -220,52 +319,18 @@ button.estimateActionBtn {
   border-color: #d93025;
   background: #fff5f5;
 }
-.estimateOpenLink {
-  color: #0066ff;
-  text-transform: uppercase;
-}
-.estimateCopyUrlBtn {
-  border: 1px solid #0066ff;
-  background: #ffffff;
-  color: #0066ff;
-  padding: 4px 10px;
-  font-size: 12px;
-  text-transform: uppercase;
-  cursor: pointer;
-  border-radius: 4px;
-}
-.estimateCopyUrlBtn:hover {
-  background: #eef4ff;
-}
-.estimateCopyUrlBtn.is-copied {
-  border-color: #4bae4f;
-  color: #4bae4f;
-  background: #effff0;
-}
-.estimateCopyForm {
-  display: inline;
-  margin: 0;
-}
-.estimateCopyEstimateBtn {
-  border: 1px solid #0066ff;
-  background: #ffffff;
-  color: #0066ff;
-  padding: 4px 10px;
-  font-size: 12px;
-  cursor: pointer;
-  border-radius: 3px;
-}
-.estimateCopyEstimateBtn:hover {
-  background: #eef4ff;
-}
 .estimatesRowActions {
   white-space: nowrap;
+  vertical-align: middle;
 }
-.estimatesRowActions .estimateOpenLink {
-  margin-right: 8px;
+.estimatesRowActionsInner {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 .estimatesRowActions .estimateIconForm + .estimateIconForm {
-  margin-left: 4px;
+  margin-left: 0;
 }
 .estimateStatusBadge {
   display: inline-block;
@@ -285,6 +350,10 @@ button.estimateActionBtn {
 .estimateStatusBadge.is-hidden {
   background: #f0f0f0;
   color: #666666;
+}
+.estimateLockBadge {
+  font-size: 11px;
+  white-space: nowrap;
 }
 .itemsPage .itemsToolbar {
   display: flex;
@@ -899,4 +968,140 @@ th.amount-value.estimate-grand-total {
   .no-print {
     display: none !important;
   }
+}
+
+/* All Estimates page — tabs + row status controls */
+.estimatesPage .estimatesTabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0;
+  margin: 0 0 -1px;
+  padding: 0;
+  border-bottom: 3px solid #ff5400;
+}
+.estimatesPage a.estimatesTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 0 0;
+  padding: 10px 18px;
+  border: 1px solid #bbbbbb;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: #ececec;
+  color: #333333;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 1.2;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.estimatesPage a.estimatesTab:hover {
+  background: #ffffff;
+  color: #000000;
+}
+.estimatesPage a.estimatesTab.is-active {
+  margin-bottom: -3px;
+  padding-bottom: 13px;
+  border-color: #000000;
+  color: #ffffff;
+}
+.estimatesPage a.estimatesTab--open.is-active {
+  background: #0066ff;
+  border-top-color: #0066ff;
+}
+.estimatesPage a.estimatesTab--accepted.is-active {
+  background: #4bae4f;
+  border-top-color: #4bae4f;
+}
+.estimatesPage a.estimatesTab--rejected.is-active {
+  background: #d8000a;
+  border-top-color: #d8000a;
+}
+.estimatesPage .estimatesTabCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.14);
+  font-size: 12px;
+  line-height: 1;
+}
+.estimatesPage a.estimatesTab.is-active .estimatesTabCount {
+  background: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+.estimatesPage .estimatesTableWrap {
+  border: 1px solid #000000;
+  border-top: 3px solid #ff5400;
+}
+.estimatesPage .estimateWorkflowToggle {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid #bbbbbb;
+  border-radius: 6px;
+  background: #f0f0f0;
+}
+.estimatesPage button.estimateWorkflowPill {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #666666;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  font-weight: bold;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  opacity: 0.8;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+}
+.estimatesPage button.estimateWorkflowPill:hover {
+  opacity: 1;
+  background: #ffffff;
+  color: #333333;
+}
+.estimatesPage button.estimateWorkflowPill.is-active {
+  opacity: 1;
+  cursor: default;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+.estimatesPage button.estimateWorkflowPill--open.is-active {
+  background: #0066ff;
+  border-color: #0066ff;
+  color: #ffffff;
+}
+.estimatesPage button.estimateWorkflowPill--accepted.is-active {
+  background: #4bae4f;
+  border-color: #4bae4f;
+  color: #ffffff;
+}
+.estimatesPage button.estimateWorkflowPill--rejected.is-active {
+  background: #d8000a;
+  border-color: #d8000a;
+  color: #ffffff;
+}
+.estimatesPage button.estimateWorkflowPill.is-active:hover {
+  color: #ffffff;
+}
+.estimatesPage .estimateWorkflowToggle.is-saving {
+  opacity: 0.65;
+  pointer-events: none;
+}
+.estimatesPage .estimateWorkflowToggle.is-error {
+  box-shadow: 0 0 0 2px #d8000a;
 }

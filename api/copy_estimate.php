@@ -8,7 +8,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit('Method not allowed');
 }
 
-if (!estimate_is_admin()) {
+if (!estimate_is_admin() && !estimate_is_manager()) {
     http_response_code(403);
     exit('Forbidden');
 }
@@ -84,6 +84,8 @@ $conn->close();
 
 if ($redirect !== '') {
     header('Location: ' . estimate_app_url($redirect));
+} elseif (estimate_is_manager()) {
+    header('Location: ' . estimate_app_url('manager_estimates.php'));
 } else {
     $url = 'index.php?id=' . rawurlencode($newId);
     if (!empty($lockResult['edit_token'])) {

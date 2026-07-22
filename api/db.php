@@ -361,7 +361,47 @@ function estimate_ensure_table($conn)
         $conn->query('ALTER TABLE estimates ADD COLUMN list_phone VARCHAR(32) DEFAULT NULL AFTER project_type');
     }
 
+    $workflowStatusCheck = $conn->query("SHOW COLUMNS FROM estimates LIKE 'workflow_status'");
+
+    if ($workflowStatusCheck && $workflowStatusCheck->num_rows === 0) {
+        $conn->query("ALTER TABLE estimates ADD COLUMN workflow_status VARCHAR(16) NOT NULL DEFAULT 'open' AFTER list_phone");
+    }
+
+    $createdAtCheck = $conn->query("SHOW COLUMNS FROM estimates LIKE 'created_at'");
+
+    if ($createdAtCheck && $createdAtCheck->num_rows === 0) {
+        $conn->query('ALTER TABLE estimates ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER is_deleted');
+    }
+
+    $updatedAtCheck = $conn->query("SHOW COLUMNS FROM estimates LIKE 'updated_at'");
+
+    if ($updatedAtCheck && $updatedAtCheck->num_rows === 0) {
+        $conn->query('ALTER TABLE estimates ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at');
+    }
+
     return true;
+}
+
+function estimate_workflow_status_normalize($value): string
+{
+    $value = strtolower(trim((string) $value));
+
+    if (in_array($value, ['open', 'accepted', 'rejected'], true)) {
+        return $value;
+    }
+
+    return 'open';
+}
+
+function estimate_workflow_status_label(string $status): string
+{
+    $labels = [
+        'open' => 'Open',
+        'accepted' => 'Accepted',
+        'rejected' => 'Rejected',
+    ];
+
+    return $labels[$status] ?? 'Open';
 }
 
 function estimate_extract_project_owner($dataJson): string

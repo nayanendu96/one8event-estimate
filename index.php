@@ -63,7 +63,7 @@ if ($categoryResult) {
 }
 
 if (!$isManager && !empty($estimateData)) {
-    $estimateData = estimate_rebuild_financial_fields($estimateData, $estimateData, $conn);
+    $estimateData = estimate_rebuild_financial_fields($estimateData, $estimateData, $conn, $estimateLocked);
 } elseif ($isManager && !empty($estimateData)) {
     $estimateData = estimate_strip_financial_fields($estimateData);
 }
@@ -251,10 +251,12 @@ function renderEstimateGroup(array $categories, $isManager = false)
                         <button type="submit" class="estimateIconBtn is-lock" title="Lock">Lock</button>
                     </form>
                     <?php endif; ?>
-                    <a class="estimateActionBtn" href="index.php">New Estimate</a>
                     <?php if (!$isManager) : ?>
-                    <a class="estimateActionBtn" href="estimates.php">All Estimates</a>
+                    <a class="estimateActionBtn" href="index.php">New Estimate</a>
+                    <?php else : ?>
+                    <a class="estimateActionBtn" href="index.php">Create New Estimate</a>
                     <?php endif; ?>
+                    <a class="estimateActionBtn" href="<?php echo $isManager ? 'manager_estimates.php' : 'estimates.php'; ?>">All Estimates</a>
                 </div>
                 <div class="estimateSaveStatus is-hidden no-print" role="status" aria-live="polite" aria-hidden="true"></div>
             </div>
