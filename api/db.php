@@ -2,23 +2,69 @@
 
 date_default_timezone_set('Asia/Kolkata');
 
-$db_host = '127.0.0.1';
-$db_name = 'one8_estimates';
-$db_user = 'root';
+$db_host = '';
+$db_name = '';
+$db_user = '';
 $db_pass = '';
 
-$db_local = __DIR__ . '/db.local.php';
-if (is_readable($db_local)) {
-    require $db_local;
+function estimate_is_local_environment(): bool
+{
+    $env = getenv('ESTIMATE_ENV');
+
+    if ($env === 'local') {
+        return true;
+    }
+
+    if ($env === 'production' || $env === 'prod') {
+        return false;
+    }
+
+    $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+
+    if ($host !== '' && preg_match('/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/', $host)) {
+        return true;
+    }
+
+    foreach (['DOCUMENT_ROOT', 'SCRIPT_FILENAME'] as $key) {
+        $path = str_replace('\\', '/', (string) realpath((string) ($_SERVER[$key] ?? '')));
+
+        if ($path !== '' && (stripos($path, '/xampp/') !== false || stripos($path, '/wamp/') !== false)) {
+            return true;
+        }
+    }
+
+    return false;
 }
+
+$db_config = estimate_is_local_environment()
+    ? __DIR__ . '/db.local.php'
+    : __DIR__ . '/db.prod.php';
+
+if (!is_readable($db_config)) {
+    trigger_error(
+        'Database config not found: ' . basename($db_config),
+        E_USER_ERROR
+    );
+}
+
+require $db_config;
 
 function estimate_db_connect()
 {
     global $db_host, $db_name, $db_user, $db_pass;
 
-    $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
+    mysqli_report(MYSQLI_REPORT_OFF);
 
-    if ($conn->connect_error) {
+    $conn = mysqli_init();
+    if (!$conn) {
+        return null;
+    }
+
+    $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 5);
+
+    $ok = @$conn->real_connect($db_host, $db_user, $db_pass, $db_name);
+
+    if (!$ok || $conn->connect_error) {
         return null;
     }
 
@@ -421,6 +467,12 @@ function estimate_ensure_item_table($conn)
 
     if ($hiddenCheck && $hiddenCheck->num_rows === 0) {
         $conn->query('ALTER TABLE estimate_item ADD COLUMN is_hidden TINYINT(1) NOT NULL DEFAULT 0 AFTER d2c_rate');
+    }
+
+    $b2vCheck = $conn->query("SHOW COLUMNS FROM estimate_item LIKE 'b2v_rate'");
+
+    if ($b2vCheck && $b2vCheck->num_rows === 0) {
+        $conn->query('ALTER TABLE estimate_item ADD COLUMN b2v_rate VARCHAR(64) DEFAULT NULL AFTER d2c_rate');
     }
 
     return true;

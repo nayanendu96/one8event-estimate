@@ -68,6 +68,10 @@ if (!$isManager && !empty($estimateData)) {
     $estimateData = estimate_strip_financial_fields($estimateData);
 }
 
+if (!empty($estimateData)) {
+    $estimateData = estimate_enrich_b2v_rates($estimateData, $conn);
+}
+
 function renderCategorySelect(array $categories, $selectedId = '')
 {
     $html = '<select class="categorySelect">';
@@ -145,7 +149,7 @@ function renderEstimateGroup(array $categories, $isManager = false)
             <tbody class="estimate-group">
                 <tr>
                     <th colspan="7">
-                        <div class="secHdrT1"><span class="groupDragHandle no-print" draggable="true" title="Drag to reorder group" aria-label="Drag to reorder group"></span>' . renderCategorySelect($categories) . '</div>
+                        <div class="secHdrT1"><span class="groupDragHandle no-print" draggable="true" title="Drag to reorder group" aria-label="Drag to reorder group"></span><label class="vendorGroupSelect no-print" title="Include this category in vendor requirement"><input type="checkbox" class="vendorGroupCheckbox"><span class="vendorGroupSelectLabel">Vendor</span></label>' . renderCategorySelect($categories) . '</div>
                     </th>
                     <th class="manager-hidden"><div class="secHdrT2"><span class="tclr02 group-subtotal">0</span></div></th>
                     <th class="no-print"><span class="closeBtnGroup" title="Delete Group">Close</span></th>
@@ -250,6 +254,9 @@ function renderEstimateGroup(array $categories, $isManager = false)
                         <input type="hidden" name="redirect" value="index.php?id=<?php echo htmlspecialchars($estimateId, ENT_QUOTES, 'UTF-8'); ?>">
                         <button type="submit" class="estimateIconBtn is-lock" title="Lock">Lock</button>
                     </form>
+                    <?php endif; ?>
+                    <?php if ($estimateId !== '') : ?>
+                    <button type="button" class="estimateActionBtn estimateCreateVendorBtn no-print">Create Vendor Requirement</button>
                     <?php endif; ?>
                     <?php if (!$isManager) : ?>
                     <a class="estimateActionBtn" href="index.php">New Estimate</a>

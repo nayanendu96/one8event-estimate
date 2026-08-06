@@ -1,0 +1,7 @@
+<?php
+
+// Copy this file to db.prod.php and set your production database credentials.
+$db_host = 'localhost';
+$db_name = 'u232206257_estimate';
+$db_user = 'u232206257_estimate';
+$db_pass = 'your_production_password';

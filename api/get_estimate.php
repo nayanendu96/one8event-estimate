@@ -59,6 +59,10 @@ if (estimate_is_manager()) {
     $data = estimate_rebuild_financial_fields($data, $data, $conn, $isLocked);
 }
 
+if (!empty($data)) {
+    $data = estimate_enrich_b2v_rates($data, $conn);
+}
+
 $conn->close();
 
 echo json_encode([
