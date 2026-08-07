@@ -203,7 +203,7 @@ function vr_renderEstimateGroup(array $categories)
                     <th style="width: 9%;">SIZE</th>
                     <th style="width: 5%;">SQFT</th>
                     <th style="width: 4%;">QTY</th>
-                    <th style="width: 6%;">RATE (B2V)</th>
+                    <th style="width: 6%;">RATE</th>
                     <th style="width: 8%;">AMT</th>
                     <th style="width: 10%;">SUB TOTAL</th>
                     <th class="no-print">&nbsp;</th>

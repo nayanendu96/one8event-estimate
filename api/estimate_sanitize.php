@@ -640,7 +640,7 @@ function vendor_requirement_export_xlsx(array $data, array $categoryMap): void
         2 => ['value' => 'SIZE', 'style' => 3],
         3 => ['value' => 'SQFT', 'style' => 3],
         4 => ['value' => 'QTY', 'style' => 3],
-        5 => ['value' => 'RATE (B2V)', 'style' => 3],
+        5 => ['value' => 'RATE', 'style' => 3],
         6 => ['value' => 'AMOUNT', 'style' => 3],
     ]);
 
