@@ -110,7 +110,7 @@ function estimate_fetch_catalog_item($conn, int $itemId): ?array
     estimate_ensure_item_table($conn);
 
     $stmt = $conn->prepare(
-        'SELECT id, item_name, unit, b2b_rate, d2c_rate
+        'SELECT id, item_name, unit, b2b_rate, d2c_rate, b2v_rate
          FROM estimate_item
          WHERE id = ? AND is_hidden = 0'
     );
@@ -140,6 +140,7 @@ function estimate_normalize_catalog_item_row(array $row): array
         'unit' => (string) $row['unit'],
         'b2b_rate' => (string) $row['b2b_rate'],
         'd2c_rate' => (string) $row['d2c_rate'],
+        'b2v_rate' => (string) ($row['b2v_rate'] ?? ''),
     ];
 }
 
@@ -154,9 +155,9 @@ function estimate_fetch_catalog_item_by_name($conn, string $itemName): ?array
     estimate_ensure_item_table($conn);
 
     $stmt = $conn->prepare(
-        'SELECT id, item_name, unit, b2b_rate, d2c_rate
+        'SELECT id, item_name, unit, b2b_rate, d2c_rate, b2v_rate
          FROM estimate_item
-         WHERE UPPER(item_name) = UPPER(?) AND is_hidden = 0
+         WHERE UPPER(TRIM(item_name)) = UPPER(?) AND is_hidden = 0
          LIMIT 1'
     );
 
@@ -177,11 +178,107 @@ function estimate_fetch_catalog_item_by_name($conn, string $itemName): ?array
     return estimate_normalize_catalog_item_row($row);
 }
 
+function estimate_normalize_item_name($name): string
+{
+    $name = strtoupper(trim((string) $name));
+
+    return preg_replace('/\s+/u', ' ', $name) ?? $name;
+}
+
+/**
+ * Load all visible catalog items indexed by id and normalized name.
+ *
+ * @return array{byId: array<int, array>, byName: array<string, array>}
+ */
+function estimate_build_catalog_index($conn): array
+{
+    $index = [
+        'byId' => [],
+        'byName' => [],
+    ];
+
+    if (!$conn) {
+        return $index;
+    }
+
+    estimate_ensure_item_table($conn);
+
+    $result = $conn->query(
+        'SELECT id, item_name, unit, b2b_rate, d2c_rate, b2v_rate
+         FROM estimate_item
+         WHERE is_hidden = 0'
+    );
+
+    if (!$result) {
+        return $index;
+    }
+
+    while ($row = $result->fetch_assoc()) {
+        $item = estimate_normalize_catalog_item_row($row);
+        $index['byId'][$item['id']] = $item;
+
+        $nameKey = estimate_normalize_item_name($item['item_name']);
+
+        if ($nameKey !== '' && !isset($index['byName'][$nameKey])) {
+            $index['byName'][$nameKey] = $item;
+        }
+    }
+
+    return $index;
+}
+
+function estimate_resolve_catalog_item_from_index(array $item, array $index): ?array
+{
+    $selectedItem = $item['selectedItem'] ?? null;
+    $itemName = estimate_normalize_item_name($item['name'] ?? '');
+
+    if (is_array($selectedItem) && !empty($selectedItem['id'])) {
+        $id = (int) $selectedItem['id'];
+
+        if (isset($index['byId'][$id])) {
+            return $index['byId'][$id];
+        }
+    }
+
+    if ($itemName !== '' && isset($index['byName'][$itemName])) {
+        return $index['byName'][$itemName];
+    }
+
+    if (is_array($selectedItem)) {
+        $selectedName = estimate_normalize_item_name($selectedItem['item_name'] ?? '');
+
+        if ($selectedName !== '' && isset($index['byName'][$selectedName])) {
+            return $index['byName'][$selectedName];
+        }
+    }
+
+    return null;
+}
+
+/**
+ * A selectedItem binding is only trustworthy if its cached item_name still matches the
+ * row's own name. If they differ, the binding is stale/corrupted (e.g. carried over from
+ * a different row during an old index-based merge bug) and must not be used for pricing.
+ */
+function estimate_selected_item_matches_row(?array $selectedItem, string $rowName): bool
+{
+    if (!is_array($selectedItem)) {
+        return false;
+    }
+
+    $rowName = estimate_normalize_item_name($rowName);
+    $selectedName = estimate_normalize_item_name($selectedItem['item_name'] ?? '');
+
+    return $rowName !== '' && $selectedName !== '' && $rowName === $selectedName;
+}
+
 function estimate_resolve_catalog_item(array $item, $conn): ?array
 {
     $selectedItem = $item['selectedItem'] ?? null;
+    $itemName = trim((string) ($item['name'] ?? ''));
 
-    if (is_array($selectedItem) && !empty($selectedItem['id'])) {
+    if (is_array($selectedItem) && !empty($selectedItem['id'])
+        && estimate_selected_item_matches_row($selectedItem, $itemName)) {
         $catalogItem = estimate_fetch_catalog_item($conn, (int) $selectedItem['id']);
 
         if ($catalogItem) {
@@ -189,10 +286,17 @@ function estimate_resolve_catalog_item(array $item, $conn): ?array
         }
     }
 
-    $itemName = trim((string) ($item['name'] ?? ''));
-
     if ($itemName !== '') {
-        return estimate_fetch_catalog_item_by_name($conn, $itemName);
+        $catalogItem = estimate_fetch_catalog_item_by_name($conn, $itemName);
+
+        if ($catalogItem) {
+            return $catalogItem;
+        }
+    }
+
+    // Row name may have been edited after autocomplete; still resolve B2V from catalog id.
+    if (is_array($selectedItem) && !empty($selectedItem['id'])) {
+        return estimate_fetch_catalog_item($conn, (int) $selectedItem['id']);
     }
 
     return null;
@@ -200,6 +304,10 @@ function estimate_resolve_catalog_item(array $item, $conn): ?array
 
 function estimate_get_catalog_rate(array $catalogItem, string $rateMode): string
 {
+    if ($rateMode === 'b2v') {
+        return (string) ($catalogItem['b2v_rate'] ?? '');
+    }
+
     if ($rateMode === 'd2c') {
         return (string) ($catalogItem['d2c_rate'] ?? '');
     }
@@ -207,29 +315,190 @@ function estimate_get_catalog_rate(array $catalogItem, string $rateMode): string
     return (string) ($catalogItem['b2b_rate'] ?? '');
 }
 
-function estimate_resolve_item_rate(array $incomingItem, ?array $existingItem, string $rateMode, $conn): string
+function estimate_get_stored_item_rate(array $item, ?array $existingItem, string $rateMode): string
 {
-    $catalogItem = estimate_resolve_catalog_item($incomingItem, $conn);
+    $sources = [$item];
 
-    if ($catalogItem) {
-        return estimate_get_catalog_rate($catalogItem, $rateMode);
+    if (is_array($existingItem)) {
+        $sources[] = $existingItem;
     }
 
-    if (is_array($existingItem) && array_key_exists('rate', $existingItem)) {
-        $existingRate = trim((string) $existingItem['rate']);
+    // Line rate wins over catalog defaults in selectedItem (user may have edited it).
+    foreach ($sources as $source) {
+        if (!array_key_exists('rate', $source)) {
+            continue;
+        }
 
-        if ($existingRate !== '') {
-            return $existingRate;
+        $rate = trim((string) $source['rate']);
+
+        if ($rate !== '') {
+            return $rate;
+        }
+    }
+
+    $rowName = trim((string) ($item['name'] ?? ($existingItem['name'] ?? '')));
+
+    foreach ($sources as $source) {
+        $selectedItem = $source['selectedItem'] ?? null;
+
+        if (!estimate_selected_item_matches_row($selectedItem, $rowName)) {
+            continue;
+        }
+
+        $modeRate = estimate_get_catalog_rate($selectedItem, $rateMode);
+
+        if ($modeRate !== '') {
+            return $modeRate;
         }
     }
 
     return '';
 }
 
-function estimate_rebuild_financial_fields(array $incoming, ?array $existing, $conn): array
+function estimate_preserve_selected_item(array $item, ?array $existingItem, ?array $catalogItem): ?array
+{
+    $rowName = trim((string) ($item['name'] ?? ($existingItem['name'] ?? '')));
+
+    if (estimate_selected_item_matches_row($item['selectedItem'] ?? null, $rowName)) {
+        return $item['selectedItem'];
+    }
+
+    if (estimate_selected_item_matches_row($existingItem['selectedItem'] ?? null, $rowName)) {
+        return $existingItem['selectedItem'];
+    }
+
+    return $catalogItem;
+}
+
+function estimate_resolve_item_rate(
+    array $incomingItem,
+    ?array $existingItem,
+    string $rateMode,
+    $conn,
+    bool $freezeRates = false
+): string {
+    $storedRate = estimate_get_stored_item_rate($incomingItem, $existingItem, $rateMode);
+
+    if ($storedRate !== '') {
+        return $storedRate;
+    }
+
+    if ($freezeRates) {
+        return '';
+    }
+
+    $catalogItem = estimate_resolve_catalog_item($incomingItem, $conn);
+
+    if ($catalogItem) {
+        return estimate_get_catalog_rate($catalogItem, $rateMode);
+    }
+
+    return '';
+}
+
+function estimate_index_existing_items_by_name(array $existingItems): array
+{
+    $pool = [];
+
+    foreach ($existingItems as $existingItem) {
+        if (!is_array($existingItem)) {
+            continue;
+        }
+
+        $name = estimate_normalize_item_name($existingItem['name'] ?? '');
+
+        if ($name === '') {
+            continue;
+        }
+
+        $pool[$name][] = $existingItem;
+    }
+
+    return $pool;
+}
+
+/**
+ * Indexes every existing item across all groups by its client-assigned rowId. This is the
+ * most reliable identity signal: it survives renames, duplicate names, and even a row being
+ * moved to a different group, unlike name- or index-based matching.
+ */
+function estimate_index_existing_items_by_row_id(array $existingGroups): array
+{
+    $pool = [];
+
+    foreach ($existingGroups as $existingGroup) {
+        if (empty($existingGroup['items']) || !is_array($existingGroup['items'])) {
+            continue;
+        }
+
+        foreach ($existingGroup['items'] as $existingItem) {
+            if (!is_array($existingItem)) {
+                continue;
+            }
+
+            $rowId = trim((string) ($existingItem['rowId'] ?? ''));
+
+            if ($rowId === '') {
+                continue;
+            }
+
+            $pool[$rowId] = $existingItem;
+        }
+    }
+
+    return $pool;
+}
+
+/**
+ * Finds the existing item that corresponds to the incoming item.
+ *
+ * Preferred match: the client-assigned rowId, which uniquely identifies a row regardless
+ * of edits, reordering, or moving it to a different group.
+ *
+ * Fallback (for rows saved before rowId existed): match by name, consumed in order via a
+ * per-name queue, rather than raw array index -- a row added/removed/reordered anywhere in
+ * the group shifts every index after it, so matching by index alone would graft an
+ * unrelated item's rate/catalog binding onto the wrong row.
+ */
+function estimate_match_existing_item(
+    array $item,
+    int $itemIndex,
+    array $existingItems,
+    array &$existingPool,
+    array $existingByRowId
+): ?array {
+    $rowId = trim((string) ($item['rowId'] ?? ''));
+
+    if ($rowId !== '' && isset($existingByRowId[$rowId])) {
+        return $existingByRowId[$rowId];
+    }
+
+    $itemName = estimate_normalize_item_name($item['name'] ?? '');
+
+    if ($itemName !== '') {
+        if (!empty($existingPool[$itemName])) {
+            return array_shift($existingPool[$itemName]);
+        }
+
+        return null;
+    }
+
+    // No name to match on (blank custom row): fall back to position, but only when the
+    // existing row at that position is also unnamed, to avoid pulling in an unrelated item.
+    $positional = is_array($existingItems[$itemIndex] ?? null) ? $existingItems[$itemIndex] : null;
+
+    if ($positional && estimate_normalize_item_name($positional['name'] ?? '') === '') {
+        return $positional;
+    }
+
+    return null;
+}
+
+function estimate_rebuild_financial_fields(array $incoming, ?array $existing, $conn, bool $freezeRates = false): array
 {
     $merged = $incoming;
-    $rateMode = isset($incoming['rateMode']) && $incoming['rateMode'] === 'd2c' ? 'd2c' : 'b2b';
+    $incomingMode = isset($incoming['rateMode']) ? (string) $incoming['rateMode'] : 'b2b';
+    $rateMode = in_array($incomingMode, ['d2c', 'b2v'], true) ? $incomingMode : 'b2b';
     $merged['rateMode'] = $rateMode;
 
     if (empty($merged['groups']) || !is_array($merged['groups'])) {
@@ -237,6 +506,7 @@ function estimate_rebuild_financial_fields(array $incoming, ?array $existing, $c
     }
 
     $existingGroups = is_array($existing['groups'] ?? null) ? $existing['groups'] : [];
+    $existingByRowId = estimate_index_existing_items_by_row_id($existingGroups);
 
     foreach ($merged['groups'] as $groupIndex => $group) {
         if (empty($group['items']) || !is_array($group['items'])) {
@@ -248,24 +518,25 @@ function estimate_rebuild_financial_fields(array $incoming, ?array $existing, $c
             ? $existingGroups[$groupIndex]['items']
             : [];
 
+        $existingPool = estimate_index_existing_items_by_name($existingItems);
+
         foreach ($group['items'] as $itemIndex => $item) {
             if (!is_array($item)) {
                 continue;
             }
 
-            $existingItem = is_array($existingItems[$itemIndex] ?? null)
-                ? $existingItems[$itemIndex]
-                : null;
+            $existingItem = estimate_match_existing_item($item, $itemIndex, $existingItems, $existingPool, $existingByRowId);
 
             $catalogItem = estimate_resolve_catalog_item($item, $conn);
+            $item['selectedItem'] = estimate_preserve_selected_item($item, $existingItem, $catalogItem);
 
-            if ($catalogItem) {
-                $item['selectedItem'] = $catalogItem;
-            } elseif (is_array($existingItem['selectedItem'] ?? null)) {
-                $item['selectedItem'] = $existingItem['selectedItem'];
-            }
-
-            $item['rate'] = estimate_resolve_item_rate($item, $existingItem, $rateMode, $conn);
+            $item['rate'] = estimate_resolve_item_rate(
+                $item,
+                $existingItem,
+                $rateMode,
+                $conn,
+                $freezeRates
+            );
             $merged['groups'][$groupIndex]['items'][$itemIndex] = $item;
         }
     }
@@ -310,4 +581,246 @@ function estimate_calculate_grand_total(array $data): float
     $gst = round($subTotal * ESTIMATE_GST_RATE);
 
     return $subTotal + $gst;
+}
+
+/**
+ * Attach hidden B2V catalog rates to line items for vendor-requirement export.
+ * Not persisted on save — enriched on each estimate load / poll only.
+ */
+function estimate_enrich_b2v_rates(array $data, $conn): array
+{
+    if (empty($data['groups']) || !is_array($data['groups']) || !$conn) {
+        return $data;
+    }
+
+    $catalogIndex = estimate_build_catalog_index($conn);
+
+    foreach ($data['groups'] as $groupIndex => $group) {
+        if (empty($group['items']) || !is_array($group['items'])) {
+            continue;
+        }
+
+        foreach ($group['items'] as $itemIndex => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $catalogItem = estimate_resolve_catalog_item_from_index($item, $catalogIndex);
+
+            if (!$catalogItem) {
+                $catalogItem = estimate_resolve_catalog_item($item, $conn);
+            }
+
+            $data['groups'][$groupIndex]['items'][$itemIndex]['b2vRate'] = $catalogItem
+                ? estimate_get_catalog_rate($catalogItem, 'b2v')
+                : '';
+        }
+    }
+
+    return $data;
+}
+
+/**
+ * Prepare vendor requirement data: line rates must be B2V catalog only, never estimate B2B/B2C.
+ */
+function vendor_requirement_prepare_data(array $data, $conn): array
+{
+    $data['rateMode'] = 'b2v';
+    $data['discount'] = '0';
+    $data['discountVisible'] = false;
+
+    if (empty($data['groups']) || !is_array($data['groups'])) {
+        $data['groups'] = [];
+
+        return $data;
+    }
+
+    $catalogIndex = estimate_build_catalog_index($conn);
+
+    foreach ($data['groups'] as $groupIndex => $group) {
+        if (empty($group['items']) || !is_array($group['items'])) {
+            continue;
+        }
+
+        foreach ($group['items'] as $itemIndex => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $catalogItem = estimate_resolve_catalog_item_from_index($item, $catalogIndex);
+
+            if (!$catalogItem) {
+                $catalogItem = estimate_resolve_catalog_item($item, $conn);
+            }
+
+            $b2v = $catalogItem ? trim(estimate_get_catalog_rate($catalogItem, 'b2v')) : '';
+
+            unset($data['groups'][$groupIndex]['items'][$itemIndex]['b2vRate']);
+
+            $data['groups'][$groupIndex]['items'][$itemIndex]['rate'] = $b2v;
+
+            if (!empty($item['selectedItem']) && is_array($item['selectedItem'])) {
+                $selected = $item['selectedItem'];
+                $data['groups'][$groupIndex]['items'][$itemIndex]['selectedItem'] = [
+                    'id' => isset($selected['id']) ? (int) $selected['id'] : 0,
+                    'item_name' => (string) ($selected['item_name'] ?? ($item['name'] ?? '')),
+                    'unit' => (string) ($selected['unit'] ?? ''),
+                    'b2v_rate' => $b2v,
+                ];
+            } elseif ($catalogItem) {
+                $data['groups'][$groupIndex]['items'][$itemIndex]['selectedItem'] = [
+                    'id' => (int) $catalogItem['id'],
+                    'item_name' => (string) $catalogItem['item_name'],
+                    'unit' => (string) $catalogItem['unit'],
+                    'b2v_rate' => $b2v,
+                ];
+            }
+        }
+    }
+
+    return $data;
+}
+
+function vendor_requirement_export_xlsx(array $data, array $categoryMap): void
+{
+    require_once __DIR__ . '/lib/simple_xlsx.php';
+
+    unset($categoryMap);
+
+    $header = is_array($data['header'] ?? null) ? $data['header'] : [];
+    $companyName = trim((string) ($header['companyName'] ?? ''));
+    $projectType = trim((string) ($header['projectType'] ?? ''));
+    $projectOwner = trim((string) ($header['projectOwner'] ?? ''));
+    $eventDate = trim((string) ($header['eventDate'] ?? ''));
+
+    $estimateTotal = estimate_calculate_estimate_total($data);
+    $discount = estimate_parse_amount($data['discount'] ?? '0');
+    $subTotal = max(0.0, $estimateTotal - $discount);
+    $gst = round($subTotal * ESTIMATE_GST_RATE);
+    $grandTotal = $subTotal + $gst;
+
+    $lastCol = 6;
+
+    $writer = new SimpleXlsxWriter();
+    $writer->setColumnWidths([
+        0 => 28,
+        1 => 22,
+        2 => 12,
+        3 => 8,
+        4 => 6,
+        5 => 12,
+        6 => 14,
+    ]);
+
+    $writer->addRow([
+        0 => ['value' => 'ONE8 EVENT — VENDOR REQUIREMENT', 'style' => 0],
+    ]);
+    $writer->mergeLastRow(0, $lastCol);
+
+    $writer->addRow([
+        0 => ['value' => 'Project Type', 'style' => 1],
+        1 => ['value' => $projectType, 'style' => 2],
+        2 => ['value' => 'Company Name', 'style' => 1],
+        3 => ['value' => $companyName, 'style' => 2],
+        4 => ['value' => 'Project Owner', 'style' => 1],
+        5 => ['value' => $projectOwner, 'style' => 2],
+        6 => ['value' => 'Event Date: ' . $eventDate, 'style' => 2],
+    ]);
+
+    $writer->addRow([]);
+
+    $writer->addRow([
+        0 => ['value' => 'ITEM NAME', 'style' => 3],
+        1 => ['value' => 'DESCRIPTION', 'style' => 3],
+        2 => ['value' => 'SIZE', 'style' => 3],
+        3 => ['value' => 'SQFT', 'style' => 3],
+        4 => ['value' => 'QTY', 'style' => 3],
+        5 => ['value' => 'RATE', 'style' => 3],
+        6 => ['value' => 'AMOUNT', 'style' => 3],
+    ]);
+
+    $groups = is_array($data['groups'] ?? null) ? $data['groups'] : [];
+
+    foreach ($groups as $group) {
+        if (!is_array($group)) {
+            continue;
+        }
+
+        $items = is_array($group['items'] ?? null) ? $group['items'] : [];
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $name = trim((string) ($item['name'] ?? ''));
+            $description = trim((string) ($item['description'] ?? ''));
+            $size = trim((string) ($item['size'] ?? ''));
+            $sqft = trim((string) ($item['unit'] ?? ''));
+            $qty = trim((string) ($item['qty'] ?? ''));
+            $rate = trim((string) ($item['rate'] ?? ''));
+            $amount = estimate_calculate_line_amount($item['unit'] ?? '', $item['qty'] ?? '', $item['rate'] ?? '');
+
+            if ($name === '' && $description === '' && $size === '' && $sqft === '' && $qty === '' && $rate === '') {
+                continue;
+            }
+
+            $rateCell = $rate !== ''
+                ? ['number' => estimate_parse_amount($rate), 'style' => 5]
+                : ['value' => '', 'style' => 4];
+
+            $amountCell = $amount > 0
+                ? ['number' => $amount, 'style' => 5]
+                : ['value' => '', 'style' => 5];
+
+            $writer->addRow([
+                0 => ['value' => $name, 'style' => 4],
+                1 => ['value' => $description, 'style' => 4],
+                2 => ['value' => $size, 'style' => 4],
+                3 => ['value' => $sqft, 'style' => 4],
+                4 => ['value' => $qty, 'style' => 4],
+                5 => $rateCell,
+                6 => $amountCell,
+            ]);
+        }
+    }
+
+    $writer->addRow([]);
+
+    $writer->addRow([
+        0 => ['value' => 'TOTAL', 'style' => 6],
+        6 => ['number' => $estimateTotal, 'style' => 7],
+    ]);
+    $writer->mergeLastRow(0, 5);
+
+    if ($discount > 0) {
+        $writer->addRow([
+            0 => ['value' => 'DISCOUNT', 'style' => 6],
+            6 => ['number' => $discount, 'style' => 7],
+        ]);
+        $writer->mergeLastRow(0, 5);
+
+        $writer->addRow([
+            0 => ['value' => 'SUB TOTAL', 'style' => 6],
+            6 => ['number' => $subTotal, 'style' => 7],
+        ]);
+        $writer->mergeLastRow(0, 5);
+    }
+
+    $writer->addRow([
+        0 => ['value' => 'GST 18%', 'style' => 6],
+        6 => ['number' => $gst, 'style' => 7],
+    ]);
+    $writer->mergeLastRow(0, 5);
+
+    $writer->addRow([
+        0 => ['value' => 'GRAND TOTAL', 'style' => 6],
+        6 => ['number' => $grandTotal, 'style' => 7],
+    ]);
+    $writer->mergeLastRow(0, 5);
+
+    $safeCompany = preg_replace('/[^\w\- ]+/u', '', $companyName) ?: 'vendor-requirement';
+    $filename = 'Vendor-Requirement-' . $safeCompany . '-' . date('Y-m-d') . '.xlsx';
+
+    $writer->output($filename);
 }

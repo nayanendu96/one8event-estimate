@@ -63,9 +63,13 @@ if ($categoryResult) {
 }
 
 if (!$isManager && !empty($estimateData)) {
-    $estimateData = estimate_rebuild_financial_fields($estimateData, $estimateData, $conn);
+    $estimateData = estimate_rebuild_financial_fields($estimateData, $estimateData, $conn, $estimateLocked);
 } elseif ($isManager && !empty($estimateData)) {
     $estimateData = estimate_strip_financial_fields($estimateData);
+}
+
+if (!empty($estimateData)) {
+    $estimateData = estimate_enrich_b2v_rates($estimateData, $conn);
 }
 
 function renderCategorySelect(array $categories, $selectedId = '')
@@ -145,7 +149,7 @@ function renderEstimateGroup(array $categories, $isManager = false)
             <tbody class="estimate-group">
                 <tr>
                     <th colspan="7">
-                        <div class="secHdrT1"><span class="groupDragHandle no-print" draggable="true" title="Drag to reorder group" aria-label="Drag to reorder group"></span>' . renderCategorySelect($categories) . '</div>
+                        <div class="secHdrT1"><span class="groupDragHandle no-print" draggable="true" title="Drag to reorder group" aria-label="Drag to reorder group"></span><label class="vendorGroupSelect no-print" title="Include this category in vendor requirement"><input type="checkbox" class="vendorGroupCheckbox"><span class="vendorGroupSelectLabel">Vendor</span></label>' . renderCategorySelect($categories) . '</div>
                     </th>
                     <th class="manager-hidden"><div class="secHdrT2"><span class="tclr02 group-subtotal">0</span></div></th>
                     <th class="no-print"><span class="closeBtnGroup" title="Delete Group">Close</span></th>
@@ -251,10 +255,15 @@ function renderEstimateGroup(array $categories, $isManager = false)
                         <button type="submit" class="estimateIconBtn is-lock" title="Lock">Lock</button>
                     </form>
                     <?php endif; ?>
-                    <a class="estimateActionBtn" href="index.php">New Estimate</a>
-                    <?php if (!$isManager) : ?>
-                    <a class="estimateActionBtn" href="estimates.php">All Estimates</a>
+                    <?php if ($estimateId !== '') : ?>
+                    <button type="button" class="estimateActionBtn estimateCreateVendorBtn no-print">Create Vendor Requirement</button>
                     <?php endif; ?>
+                    <?php if (!$isManager) : ?>
+                    <a class="estimateActionBtn" href="index.php">New Estimate</a>
+                    <?php else : ?>
+                    <a class="estimateActionBtn" href="index.php">Create New Estimate</a>
+                    <?php endif; ?>
+                    <a class="estimateActionBtn" href="<?php echo $isManager ? 'manager_estimates.php' : 'estimates.php'; ?>">All Estimates</a>
                 </div>
                 <div class="estimateSaveStatus is-hidden no-print" role="status" aria-live="polite" aria-hidden="true"></div>
             </div>

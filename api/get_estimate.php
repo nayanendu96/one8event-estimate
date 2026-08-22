@@ -51,11 +51,16 @@ if (!$row) {
 
 $decoded = json_decode($row['data'], true);
 $data = is_array($decoded) ? $decoded : [];
+$isLocked = (int) $row['is_locked'] === 1;
 
 if (estimate_is_manager()) {
     $data = estimate_strip_financial_fields($data);
 } elseif (!empty($data)) {
-    $data = estimate_rebuild_financial_fields($data, $data, $conn);
+    $data = estimate_rebuild_financial_fields($data, $data, $conn, $isLocked);
+}
+
+if (!empty($data)) {
+    $data = estimate_enrich_b2v_rates($data, $conn);
 }
 
 $conn->close();

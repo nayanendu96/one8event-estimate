@@ -5,11 +5,15 @@
     var estimateId = window.estimateId || '';
     var estimateData = window.estimateData || {};
     var estimateAppBase = window.estimateAppBase || '';
+    var appConfig = window.estimateAppConfig || {};
+    var isVendorMode = appConfig.mode === 'vendor';
+    var saveEnabled = appConfig.enableSave !== false;
     var isLocked = !!window.estimateLocked;
     var isManager = !!window.estimateIsManager;
+    var hideFinancials = isManager && !isVendorMode;
     var savedDiscount = '0';
     var GST_RATE = 0.18;
-    var rateMode = 'b2b';
+    var rateMode = appConfig.rateMode || 'b2b';
     var discountEditing = false;
     var isRestoring = false;
     var saveTimer = null;
@@ -26,7 +30,7 @@
     var editHeartbeatTimer = null;
     var LIVE_POLL_MS = 5000;
     var EDIT_HEARTBEAT_MS = 60000;
-    var DEFAULT_DOCUMENT_TITLE = 'Estimate by ONE8 EVENT X';
+    var DEFAULT_DOCUMENT_TITLE = appConfig.documentTitle || 'Estimate by ONE8 EVENT X';
 
     var ones = [
         '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
@@ -174,14 +178,30 @@
         scope.querySelectorAll('.itemNameInput, .itemDescriptionInput').forEach(resizeItemNameField);
     }
 
+    function generateRowId() {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return window.crypto.randomUUID();
+        }
+
+        return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    }
+
     function buildItemRow() {
-        var rateCell = isManager
-            ? '<td class="manager-hidden">&nbsp;</td>' +
-              '<td class="manager-hidden">&nbsp;</td>' +
-              '<td class="manager-hidden">&nbsp;</td>'
-            : '<td class="manager-hidden"><div class="inpBx"><input type="text" placeholder="" class="txtfld itemRateInput"/></div></td>' +
-              '<td class="manager-hidden"><div class="inpBx"><input type="text" placeholder="" class="txtfld itemAmtInput" readonly/></div></td>' +
-              '<td class="manager-hidden">&nbsp;</td>';
+        var rateCell;
+
+        if (hideFinancials) {
+            rateCell = '<td class="manager-hidden">&nbsp;</td>' +
+                '<td class="manager-hidden">&nbsp;</td>' +
+                '<td class="manager-hidden">&nbsp;</td>';
+        } else if (isVendorMode) {
+            rateCell = '<td><div class="inpBx"><input type="text" placeholder="Rate" class="txtfld itemRateInput"/></div></td>' +
+                '<td><div class="inpBx"><input type="text" placeholder="Amt" class="txtfld itemAmtInput" readonly/></div></td>' +
+                '<td>&nbsp;</td>';
+        } else {
+            rateCell = '<td class="manager-hidden"><div class="inpBx"><input type="text" placeholder="" class="txtfld itemRateInput"/></div></td>' +
+                '<td class="manager-hidden"><div class="inpBx"><input type="text" placeholder="" class="txtfld itemAmtInput" readonly/></div></td>' +
+                '<td class="manager-hidden">&nbsp;</td>';
+        }
 
         return (
             '<tr class="item-row">' +
@@ -270,6 +290,12 @@
 
         var sqft = parseAmountOrDefault(sqftInput.value, 1);
         var qty = parseAmountOrDefault(qtyInput.value, 1);
+
+        if (isVendorMode && !isCalcFieldActive(rateRaw)) {
+            amtInput.value = '';
+            return 0;
+        }
+
         var rate = parseAmountOrDefault(rateInput.value, 1);
         var amount = sqft * qty * rate;
 
@@ -421,7 +447,13 @@
 
             group.querySelectorAll('tr.item-row').forEach(function (row) {
                 var fields = getRowAllFields(row);
+
+                if (!row._rowId) {
+                    row._rowId = generateRowId();
+                }
+
                 var item = {
+                    rowId: row._rowId,
                     name: fields.name ? fields.name.value : '',
                     description: fields.description ? fields.description.value : '',
                     size: fields.size ? fields.size.value : '',
@@ -429,12 +461,12 @@
                     unit: fields.sqft ? fields.sqft.value : ''
                 };
 
-                if (!isManager) {
+                if (!hideFinancials) {
                     item.rate = fields.rate ? fields.rate.value : '';
                 }
 
                 if (row._selectedItem) {
-                    item.selectedItem = isManager
+                    item.selectedItem = hideFinancials
                         ? stripSelectedItem(row._selectedItem)
                         : row._selectedItem;
                 }
@@ -456,7 +488,7 @@
         var eventDateInput = document.querySelector('.eventDateInput');
 
         var state = {
-            rateMode: rateMode,
+            rateMode: isVendorMode ? 'b2v' : rateMode,
             header: {
                 projectType: projectTypeInput ? projectTypeInput.value : '',
                 companyName: companyNameInput ? companyNameInput.value : '',
@@ -466,7 +498,7 @@
             groups: groups
         };
 
-        if (!isManager) {
+        if (!hideFinancials) {
             state.discount = discount;
             state.discountVisible = discountEditing || parseAmount(discount) > 0;
         }
@@ -496,6 +528,13 @@
         var fields = getRowAllFields(row);
         var data = itemData || {};
 
+        // Preserve a stable identity for this row across saves/reloads. If the loaded
+        // data already carries a rowId (from a previous save), reuse it so this specific
+        // row keeps its own rate/catalog binding even if other rows are added, removed,
+        // or reordered around it. Otherwise (brand new row, or legacy data saved before
+        // rowId existed) generate a fresh one now.
+        row._rowId = data.rowId || row._rowId || generateRowId();
+
         if (fields.name) {
             fields.name.value = data.name || '';
             resizeItemNameField(fields.name);
@@ -518,17 +557,45 @@
             fields.qty.value = data.qty || '';
         }
 
-        if (fields.rate && !isManager) {
-            fields.rate.value = data.rate || '';
+        if (fields.rate && !hideFinancials) {
+            if (isVendorMode) {
+                fields.rate.value = data.rate != null ? String(data.rate) : '';
+            } else {
+                fields.rate.value = data.rate || '';
+            }
         }
 
         if (data.selectedItem) {
-            row._selectedItem = isManager
+            row._selectedItem = hideFinancials
                 ? stripSelectedItem(data.selectedItem)
                 : data.selectedItem;
         } else {
             row._selectedItem = null;
         }
+
+        row._b2vRate = resolveB2vRateFromData(data);
+    }
+
+    function resolveB2vRateFromData(data) {
+        if (!data || typeof data !== 'object') {
+            return '';
+        }
+
+        if (data.b2vRate !== undefined && data.b2vRate !== null && String(data.b2vRate).trim() !== '') {
+            return String(data.b2vRate).trim();
+        }
+
+        if (data.selectedItem && data.selectedItem.b2v_rate !== undefined
+            && data.selectedItem.b2v_rate !== null
+            && String(data.selectedItem.b2v_rate).trim() !== '') {
+            return String(data.selectedItem.b2v_rate).trim();
+        }
+
+        if (isVendorMode && data.rate !== undefined && data.rate !== null && String(data.rate).trim() !== '') {
+            return String(data.rate).trim();
+        }
+
+        return '';
     }
 
     function buildEstimateGroupFromData(groupData) {
@@ -538,13 +605,14 @@
         var rowsHtml = items.map(function () {
             return buildItemRow();
         }).join('');
+        var subtotalCellClass = hideFinancials ? 'manager-hidden' : '';
 
         var tbody = document.createElement('tbody');
         tbody.className = 'estimate-group';
         tbody.innerHTML =
             '<tr>' +
                 '<th colspan="7">' + buildGroupHeaderHtml() + '</th>' +
-                '<th class="manager-hidden"><div class="secHdrT2"><span class="tclr02 group-subtotal">0</span></div></th>' +
+                '<th class="' + subtotalCellClass + '"><div class="secHdrT2"><span class="tclr02 group-subtotal">0</span></div></th>' +
                 '<th class="no-print"><span class="closeBtnGroup" title="Delete Group">Close</span></th>' +
             '</tr>' +
             rowsHtml +
@@ -576,6 +644,7 @@
             return;
         }
 
+        estimateData = data;
         isRestoring = true;
 
         try {
@@ -623,8 +692,12 @@
                 });
             }
 
-            setRateMode(data.rateMode || 'b2b', table);
-            updateFooterTotals(table, false);
+            setRateMode(data.rateMode || (isVendorMode ? 'b2v' : 'b2b'), table, false);
+            if (isVendorMode) {
+                normalizeVendorRequirementRows(table);
+            } else {
+                updateFooterTotals(table, false);
+            }
             updateDocumentTitle();
         } finally {
             isRestoring = false;
@@ -637,7 +710,7 @@
     }
 
     function getEditStorageKey(id) {
-        return 'estimateEditToken:' + id;
+        return (appConfig.editTokenPrefix || 'estimateEditToken:') + id;
     }
 
     function storeEditToken(id, token) {
@@ -713,7 +786,7 @@
         }
 
         editHeartbeatTimer = setInterval(function () {
-            fetch(getAppPath('api/acquire_edit.php'), {
+            fetch(getAppPath(appConfig.acquireEditApi || 'api/acquire_edit.php'), {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: {
@@ -762,11 +835,11 @@
         });
 
         if (navigator.sendBeacon) {
-            navigator.sendBeacon(getAppPath('api/release_edit.php'), new Blob([payload], { type: 'application/json' }));
+            navigator.sendBeacon(getAppPath(appConfig.releaseEditApi || 'api/release_edit.php'), new Blob([payload], { type: 'application/json' }));
             return;
         }
 
-        fetch(getAppPath('api/release_edit.php'), {
+        fetch(getAppPath(appConfig.releaseEditApi || 'api/release_edit.php'), {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
@@ -803,7 +876,7 @@
             return;
         }
 
-        fetch(getAppPath('api/get_estimate.php?id=' + encodeURIComponent(estimateId)), {
+        fetch(getAppPath((appConfig.getApi || 'api/get_estimate.php') + '?id=' + encodeURIComponent(estimateId)), {
             credentials: 'same-origin'
         })
             .then(function (response) {
@@ -884,7 +957,7 @@
             return;
         }
 
-        fetch(getAppPath('api/acquire_edit.php'), {
+        fetch(getAppPath(appConfig.acquireEditApi || 'api/acquire_edit.php'), {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
@@ -932,7 +1005,7 @@
             return;
         }
 
-        fetch(getAppPath('api/acquire_edit.php'), {
+        fetch(getAppPath(appConfig.acquireEditApi || 'api/acquire_edit.php'), {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
@@ -987,9 +1060,11 @@
     }
 
     function getEstimatePageUrl(id) {
+        var page = appConfig.pageFile || 'index.php';
+
         return id
-            ? getAppPath('index.php?id=' + encodeURIComponent(id))
-            : getAppPath('index.php');
+            ? getAppPath(page + '?id=' + encodeURIComponent(id))
+            : getAppPath(page);
     }
 
     function getSaveStatusEl() {
@@ -1084,6 +1159,7 @@
         if (result.id) {
             estimateId = result.id;
             updateEstimateUrl(estimateId);
+            updateCreateVendorButton();
         }
 
         if (result.edit_token) {
@@ -1098,7 +1174,7 @@
     }
 
     function saveEstimate(table, isConflictRetry) {
-        if (isRestoring || isReadOnly()) {
+        if (!saveEnabled || isRestoring || isReadOnly()) {
             return;
         }
 
@@ -1138,11 +1214,11 @@
             expected_updated_at: expectedUpdatedAt
         };
 
-        if (!isManager) {
+        if (!hideFinancials) {
             payload.grand_total = grandTotal;
         }
 
-        fetch(getAppPath('api/save_estimate.php'), {
+        fetch(getAppPath(appConfig.saveApi || 'api/save_estimate.php'), {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
@@ -1234,7 +1310,7 @@
     }
 
     function scheduleSave(table) {
-        if (isRestoring || isReadOnly()) {
+        if (!saveEnabled || isRestoring || isReadOnly()) {
             return;
         }
 
@@ -1252,8 +1328,12 @@
     }
 
     function getActiveItemRate(item) {
-        if (isManager || !item) {
+        if (hideFinancials || !item) {
             return '';
+        }
+
+        if (rateMode === 'b2v') {
+            return item.b2v_rate || '';
         }
 
         if (rateMode === 'd2c') {
@@ -1270,7 +1350,7 @@
     }
 
     function refreshSelectedItemRates(table) {
-        if (isManager || !table) {
+        if (hideFinancials || !table) {
             return;
         }
 
@@ -1293,9 +1373,23 @@
         updateFooterTotals(table);
     }
 
-    function setRateMode(mode, table) {
-        rateMode = mode === 'd2c' ? 'd2c' : 'b2b';
+    function setRateMode(mode, table, applyToRates) {
+        if (mode === 'b2v') {
+            rateMode = 'b2v';
+        } else {
+            rateMode = mode === 'd2c' ? 'd2c' : 'b2b';
+        }
         updateRateToggleUI();
+
+        // applyToRates defaults to true only for explicit user-initiated mode switches
+        // (the toggle button click). When loading/syncing state from the server, the
+        // rate fields already hold the authoritative saved rate for each row -- forcing
+        // a catalog-rate refresh here would silently discard any manually edited rate
+        // (and then auto-save that wrong value right back to the server).
+        if (applyToRates === false) {
+            return;
+        }
+
         refreshSelectedItemRates(table);
         scheduleSave(table);
     }
@@ -1327,11 +1421,20 @@
         fields.name.value = (item.item_name || '').toUpperCase();
         resizeItemNameField(fields.name);
 
-        if (!isManager && fields.rate) {
+        if (!hideFinancials && fields.rate) {
             fields.rate.value = getActiveItemRate(item);
         }
 
-        row._selectedItem = isManager ? stripSelectedItem(item) : item;
+        row._selectedItem = hideFinancials ? stripSelectedItem(item) : item;
+        row._b2vRate = (item.b2v_rate !== undefined && item.b2v_rate !== null && String(item.b2v_rate).trim() !== '')
+            ? String(item.b2v_rate).trim()
+            : '';
+
+        if (isVendorMode && row._selectedItem && typeof row._selectedItem === 'object') {
+            row._selectedItem.b2v_rate = row._b2vRate;
+            delete row._selectedItem.b2b_rate;
+            delete row._selectedItem.d2c_rate;
+        }
 
         recalculateFromRow(row, table);
     }
@@ -1376,7 +1479,13 @@
             return;
         }
 
-        fetch('api/search_items.php?q=' + encodeURIComponent(query))
+        var searchUrl = 'api/search_items.php?q=' + encodeURIComponent(query);
+
+        if (appConfig.searchItemsMode) {
+            searchUrl += '&mode=' + encodeURIComponent(appConfig.searchItemsMode);
+        }
+
+        fetch(searchUrl)
             .then(function (response) {
                 return response.json();
             })
@@ -1429,19 +1538,28 @@
     }
 
     function buildGroupHeaderHtml() {
+        var vendorCheckbox = appConfig.enableVendorCheckbox !== false
+            ? '<label class="vendorGroupSelect no-print" title="Include this category in vendor requirement">' +
+                '<input type="checkbox" class="vendorGroupCheckbox">' +
+                '<span class="vendorGroupSelectLabel">Vendor</span>' +
+              '</label>'
+            : '';
+
         return '<div class="secHdrT1">' +
             '<span class="groupDragHandle no-print" draggable="true" title="Drag to reorder group" aria-label="Drag to reorder group"></span>' +
+            vendorCheckbox +
             buildCategorySelect() +
             '</div>';
     }
 
     function buildEstimateGroup() {
+        var subtotalCellClass = hideFinancials ? 'manager-hidden' : '';
         var tbody = document.createElement('tbody');
         tbody.className = 'estimate-group';
         tbody.innerHTML =
             '<tr>' +
                 '<th colspan="7">' + buildGroupHeaderHtml() + '</th>' +
-                '<th class="manager-hidden"><div class="secHdrT2"><span class="tclr02 group-subtotal">0</span></div></th>' +
+                '<th class="' + subtotalCellClass + '"><div class="secHdrT2"><span class="tclr02 group-subtotal">0</span></div></th>' +
                 '<th class="no-print"><span class="closeBtnGroup" title="Delete Group">Close</span></th>' +
             '</tr>' +
             buildItemRow() +
@@ -1479,6 +1597,12 @@
         }
 
         addRowTr.insertAdjacentHTML('beforebegin', buildItemRow());
+        var newRow = addRowTr.previousElementSibling;
+
+        if (newRow) {
+            newRow._rowId = generateRowId();
+        }
+
         updateFooterTotals(table);
     }
 
@@ -1827,6 +1951,231 @@
         document.title = getDocumentTitle();
     }
 
+    function syncB2vRatesFromEnrichedEstimateData(table) {
+        var itemsByName = {};
+
+        (estimateData.groups || []).forEach(function (group) {
+            (group.items || []).forEach(function (item) {
+                var key = String(item.name || '').toUpperCase().replace(/\s+/g, ' ').trim();
+
+                if (key && item.b2vRate != null && String(item.b2vRate).trim() !== '') {
+                    itemsByName[key] = String(item.b2vRate).trim();
+                }
+            });
+        });
+
+        table.querySelectorAll('tr.item-row').forEach(function (row) {
+            if (row._b2vRate !== undefined && row._b2vRate !== null && String(row._b2vRate).trim() !== '') {
+                return;
+            }
+
+            var nameInput = row.querySelector('.itemNameInput');
+            var key = nameInput ? String(nameInput.value || '').toUpperCase().replace(/\s+/g, ' ').trim() : '';
+
+            if (key && Object.prototype.hasOwnProperty.call(itemsByName, key)) {
+                row._b2vRate = itemsByName[key];
+            }
+        });
+    }
+
+    function normalizeVendorRequirementRows(table) {
+        if (!isVendorMode || !table) {
+            return;
+        }
+
+        var ratesByName = {};
+
+        (estimateData.groups || []).forEach(function (group) {
+            (group.items || []).forEach(function (item) {
+                var key = String(item.name || '').toUpperCase().replace(/\s+/g, ' ').trim();
+                var rate = item.rate != null ? String(item.rate).trim() : '';
+
+                if (key && rate !== '') {
+                    ratesByName[key] = rate;
+                }
+            });
+        });
+
+        table.querySelectorAll('tr.item-row').forEach(function (row) {
+            var rateInput = row.querySelector('.itemRateInput');
+            var nameInput = row.querySelector('.itemNameInput');
+            var key = nameInput ? String(nameInput.value || '').toUpperCase().replace(/\s+/g, ' ').trim() : '';
+            var b2v = '';
+
+            if (key && Object.prototype.hasOwnProperty.call(ratesByName, key)) {
+                b2v = ratesByName[key];
+            } else {
+                b2v = getB2vRateForRow(row);
+            }
+
+            if (rateInput) {
+                rateInput.value = b2v;
+            }
+
+            row._b2vRate = b2v;
+
+            if (row._selectedItem && typeof row._selectedItem === 'object') {
+                row._selectedItem.b2v_rate = b2v;
+                delete row._selectedItem.b2b_rate;
+                delete row._selectedItem.d2c_rate;
+            }
+
+            calculateRowAmount(row);
+        });
+
+        updateFooterTotals(table, false);
+    }
+
+    function getB2vRateForRow(row) {
+        if (!row) {
+            return '';
+        }
+
+        if (row._b2vRate !== undefined && row._b2vRate !== null && String(row._b2vRate).trim() !== '') {
+            return String(row._b2vRate).trim();
+        }
+
+        if (row._selectedItem && row._selectedItem.b2v_rate !== undefined
+            && row._selectedItem.b2v_rate !== null
+            && String(row._selectedItem.b2v_rate).trim() !== '') {
+            return String(row._selectedItem.b2v_rate).trim();
+        }
+
+        if (isVendorMode) {
+            var rateInput = row.querySelector('.itemRateInput');
+
+            if (rateInput && String(rateInput.value || '').trim() !== '') {
+                return String(rateInput.value).trim();
+            }
+        }
+
+        return '';
+    }
+
+    function collectVendorRequirementPayload(table) {
+        var state = collectState(table);
+        var groups = [];
+
+        table.querySelectorAll('tbody.estimate-group').forEach(function (group) {
+            var checkbox = group.querySelector('.vendorGroupCheckbox');
+
+            if (!checkbox || !checkbox.checked) {
+                return;
+            }
+
+            var select = group.querySelector('.categorySelect');
+            var items = [];
+
+            group.querySelectorAll('tr.item-row').forEach(function (row) {
+                var fields = getRowAllFields(row);
+                var name = fields.name ? fields.name.value.trim() : '';
+                var description = fields.description ? fields.description.value.trim() : '';
+                var size = fields.size ? fields.size.value.trim() : '';
+                var sqft = fields.sqft ? fields.sqft.value.trim() : '';
+                var qty = fields.qty ? fields.qty.value.trim() : '';
+                var rate = getB2vRateForRow(row).trim();
+
+                if (name === '' && description === '' && size === '' && sqft === '' && qty === '' && rate === '') {
+                    return;
+                }
+
+                items.push({
+                    name: fields.name ? fields.name.value : '',
+                    description: fields.description ? fields.description.value : '',
+                    size: fields.size ? fields.size.value : '',
+                    unit: fields.sqft ? fields.sqft.value : '',
+                    qty: fields.qty ? fields.qty.value : '',
+                    rate: rate,
+                    selectedItem: row._selectedItem && typeof row._selectedItem === 'object'
+                        ? {
+                            id: row._selectedItem.id,
+                            item_name: row._selectedItem.item_name || (fields.name ? fields.name.value : ''),
+                            unit: row._selectedItem.unit || '',
+                            b2v_rate: rate
+                        }
+                        : null
+                });
+            });
+
+            if (items.length) {
+                groups.push({
+                    categoryId: select ? select.value : '',
+                    items: items
+                });
+            }
+        });
+
+        return {
+            rateMode: 'b2v',
+            header: state.header,
+            groups: groups,
+            discount: '0',
+            discountVisible: false
+        };
+    }
+
+    function openVendorRequirementForm(data) {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = getAppPath('vendor_requirement.php');
+        form.target = '_blank';
+
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'data';
+        input.value = JSON.stringify(data);
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    }
+
+    function submitVendorRequirement(table) {
+        syncB2vRatesFromEnrichedEstimateData(table);
+
+        var payload = collectVendorRequirementPayload(table);
+
+        if (!payload.groups.length) {
+            window.alert('Select at least one category using the Vendor checkbox, then try again.');
+            return;
+        }
+
+        openVendorRequirementForm(payload);
+    }
+
+    function exportVendorRequirement(table) {
+        var state = collectState(table);
+
+        if (!hasSavableItems(state)) {
+            window.alert('Add at least one item before exporting.');
+            return;
+        }
+
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = getAppPath('api/export_vendor_requirement.php');
+        form.target = '_blank';
+
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'data';
+        input.value = JSON.stringify(state);
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    }
+
+    function updateCreateVendorButton() {
+        var btn = document.querySelector('.estimateCreateVendorBtn');
+
+        if (!btn) {
+            return;
+        }
+
+        btn.disabled = !estimateId;
+    }
+
     function bindPrintTitle() {
         window.addEventListener('beforeprint', function () {
             updateDocumentTitle();
@@ -1882,15 +2231,18 @@
 
         bindPrintTitle();
         updateDocumentTitle();
+        updateCreateVendorButton();
 
-        var printBtn = document.querySelector('.estimatePrintBtn');
+        if (appConfig.enablePrint !== false) {
+            var printBtn = document.querySelector('.estimatePrintBtn');
 
-        if (printBtn) {
-            printBtn.addEventListener('click', function () {
-                updateDocumentTitle();
-                resizeAllItemNameFields(document);
-                window.print();
-            });
+            if (printBtn) {
+                printBtn.addEventListener('click', function () {
+                    updateDocumentTitle();
+                    resizeAllItemNameFields(document);
+                    window.print();
+                });
+            }
         }
 
         var table = document.querySelector('.frmTable table');
@@ -1899,7 +2251,7 @@
             return;
         }
 
-        if (!isManager) {
+        if (!hideFinancials && appConfig.enableRateToggle !== false) {
             document.querySelectorAll('.rateToggleBtn').forEach(function (button) {
                 button.addEventListener('click', function () {
                     if (isReadOnly()) {
@@ -2070,7 +2422,7 @@
         initGroupDragDrop(table);
         tryRestoreEditSession(table);
 
-        if (!isSpectator && estimateId && editToken) {
+        if (saveEnabled && !isSpectator && estimateId && editToken) {
             storeEditToken(estimateId, editToken);
             startEditHeartbeat(table);
         }
@@ -2081,6 +2433,26 @@
             startEditBtn.addEventListener('click', function () {
                 startEditingEstimate(table);
             });
+        }
+
+        var createVendorBtn = document.querySelector('.estimateCreateVendorBtn');
+
+        if (createVendorBtn) {
+            createVendorBtn.addEventListener('click', function () {
+                submitVendorRequirement(table);
+            });
+        }
+
+        var exportVendorBtn = document.querySelector('.estimateExportVendorBtn');
+
+        if (exportVendorBtn) {
+            exportVendorBtn.addEventListener('click', function () {
+                exportVendorRequirement(table);
+            });
+        }
+
+        if (!saveEnabled) {
+            setSaveStatus('hidden');
         }
 
         window.addEventListener('beforeunload', function () {

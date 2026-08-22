@@ -18,6 +18,7 @@ $itemName = isset($_POST['item_name']) ? trim((string) $_POST['item_name']) : ''
 $unit = isset($_POST['unit']) ? trim((string) $_POST['unit']) : '';
 $b2bRate = isset($_POST['b2b_rate']) ? trim((string) $_POST['b2b_rate']) : '';
 $d2cRate = isset($_POST['d2c_rate']) ? trim((string) $_POST['d2c_rate']) : '';
+$b2vRate = isset($_POST['b2v_rate']) ? trim((string) $_POST['b2v_rate']) : '';
 $redirect = isset($_POST['redirect']) ? trim((string) $_POST['redirect']) : 'items.php';
 
 if ($itemName === '') {
@@ -39,7 +40,7 @@ estimate_ensure_item_table($conn);
 if ($id > 0) {
     $stmt = $conn->prepare(
         'UPDATE estimate_item
-         SET item_name = ?, unit = ?, b2b_rate = ?, d2c_rate = ?
+         SET item_name = ?, unit = ?, b2b_rate = ?, d2c_rate = ?, b2v_rate = ?
          WHERE id = ? AND is_hidden = 0'
     );
 
@@ -49,7 +50,7 @@ if ($id > 0) {
         exit('Query preparation failed');
     }
 
-    $stmt->bind_param('ssssi', $itemName, $unit, $b2bRate, $d2cRate, $id);
+    $stmt->bind_param('sssssi', $itemName, $unit, $b2bRate, $d2cRate, $b2vRate, $id);
     $stmt->execute();
     $updated = $stmt->affected_rows > 0;
     $stmt->close();
@@ -61,8 +62,8 @@ if ($id > 0) {
     }
 } else {
     $stmt = $conn->prepare(
-        'INSERT INTO estimate_item (item_name, unit, b2b_rate, d2c_rate, is_hidden)
-         VALUES (?, ?, ?, ?, 0)'
+        'INSERT INTO estimate_item (item_name, unit, b2b_rate, d2c_rate, b2v_rate, is_hidden)
+         VALUES (?, ?, ?, ?, ?, 0)'
     );
 
     if (!$stmt) {
@@ -71,7 +72,7 @@ if ($id > 0) {
         exit('Query preparation failed');
     }
 
-    $stmt->bind_param('ssss', $itemName, $unit, $b2bRate, $d2cRate);
+    $stmt->bind_param('sssss', $itemName, $unit, $b2bRate, $d2cRate, $b2vRate);
     $stmt->execute();
     $stmt->close();
 }

@@ -22,8 +22,9 @@ if (!$conn) {
 estimate_ensure_item_table($conn);
 
 $like = '%' . $query . '%';
+$rateMode = isset($_GET['mode']) ? strtolower(trim((string) $_GET['mode'])) : '';
 $stmt = $conn->prepare(
-    'SELECT id, item_name, unit, b2b_rate, d2c_rate
+    'SELECT id, item_name, unit, b2b_rate, d2c_rate, b2v_rate
      FROM estimate_item
      WHERE item_name LIKE ? AND is_hidden = 0
      ORDER BY item_name ASC
@@ -48,9 +49,12 @@ while ($row = $result->fetch_assoc()) {
         'id' => (int) $row['id'],
         'item_name' => $row['item_name'],
         'unit' => $row['unit'],
+        'b2v_rate' => (string) ($row['b2v_rate'] ?? ''),
     ];
 
-    if (!estimate_is_manager()) {
+    if ($rateMode === 'b2v') {
+        // b2v_rate already included above
+    } elseif (!estimate_is_manager()) {
         $item['b2b_rate'] = $row['b2b_rate'];
         $item['d2c_rate'] = $row['d2c_rate'];
     }

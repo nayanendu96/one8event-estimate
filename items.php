@@ -19,7 +19,7 @@ if (!$conn) {
 estimate_ensure_item_table($conn);
 
 $items = [];
-$sql = 'SELECT id, item_name, unit, b2b_rate, d2c_rate, is_hidden
+$sql = 'SELECT id, item_name, unit, b2b_rate, d2c_rate, b2v_rate, is_hidden
         FROM estimate_item';
 $params = [];
 $types = '';
@@ -91,6 +91,7 @@ $redirectTarget = itemsPageUrl($showHidden, $searchQuery);
 <title>All Items - ONE8 EVENT</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="css/style.css" rel="stylesheet" type="text/css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 <body>
 <div class="page estimatesPage itemsPage">
@@ -130,6 +131,7 @@ $redirectTarget = itemsPageUrl($showHidden, $searchQuery);
                     <th>Unit</th>
                     <th>B2B Rate</th>
                     <th>D2C Rate</th>
+                    <th>B2V Rate</th>
                     <th>&nbsp;</th>
                 </tr>
             </thead>
@@ -147,6 +149,9 @@ $redirectTarget = itemsPageUrl($showHidden, $searchQuery);
                     <td>
                         <input form="item-form-new" type="text" name="d2c_rate" class="itemsInput" placeholder="D2C">
                     </td>
+                    <td>
+                        <input form="item-form-new" type="text" name="b2v_rate" class="itemsInput" placeholder="B2V">
+                    </td>
                     <td class="estimatesRowActions">
                         <form id="item-form-new" method="post" action="api/save_item.php">
                             <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirectTarget, ENT_QUOTES, 'UTF-8'); ?>">
@@ -156,7 +161,7 @@ $redirectTarget = itemsPageUrl($showHidden, $searchQuery);
                 </tr>
                 <?php if (empty($items)) : ?>
                     <tr>
-                        <td colspan="5" class="itemsEmptyCell">No items found.</td>
+                        <td colspan="6" class="itemsEmptyCell">No items found.</td>
                     </tr>
                 <?php else : ?>
                     <?php foreach ($items as $item) :
@@ -177,7 +182,11 @@ $redirectTarget = itemsPageUrl($showHidden, $searchQuery);
                             <td>
                                 <input form="<?php echo $formId; ?>" type="text" name="d2c_rate" class="itemsInput" value="<?php echo htmlspecialchars((string) $item['d2c_rate'], ENT_QUOTES, 'UTF-8'); ?>">
                             </td>
+                            <td>
+                                <input form="<?php echo $formId; ?>" type="text" name="b2v_rate" class="itemsInput" value="<?php echo htmlspecialchars((string) ($item['b2v_rate'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                            </td>
                             <td class="estimatesRowActions">
+                                <div class="estimatesRowActionsInner">
                                 <?php if ($isHidden) : ?>
                                     <span class="estimateStatusBadge is-hidden">Hidden</span>
                                     <form class="estimateIconForm" method="post" action="api/restore_item.php">
@@ -194,9 +203,12 @@ $redirectTarget = itemsPageUrl($showHidden, $searchQuery);
                                     <form class="estimateIconForm" method="post" action="api/hide_item.php" onsubmit="return confirm('Hide this item from the list? It will no longer appear in autocomplete.');">
                                         <input type="hidden" name="id" value="<?php echo $id; ?>">
                                         <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirectTarget, ENT_QUOTES, 'UTF-8'); ?>">
-                                        <button type="submit" class="estimateIconBtn is-delete" title="Hide">Hide</button>
+                                        <button type="submit" class="estimateIconBtn is-delete" title="Hide" aria-label="Hide">
+                                            <i class="fa-solid fa-trash-can fa-fw" aria-hidden="true"></i>
+                                        </button>
                                     </form>
                                 <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
