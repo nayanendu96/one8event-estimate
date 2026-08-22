@@ -187,13 +187,21 @@
     }
 
     function buildItemRow() {
-        var rateCell = hideFinancials
-            ? '<td class="manager-hidden">&nbsp;</td>' +
-              '<td class="manager-hidden">&nbsp;</td>' +
-              '<td class="manager-hidden">&nbsp;</td>'
-            : '<td class="manager-hidden"><div class="inpBx"><input type="text" placeholder="" class="txtfld itemRateInput"/></div></td>' +
-              '<td class="manager-hidden"><div class="inpBx"><input type="text" placeholder="" class="txtfld itemAmtInput" readonly/></div></td>' +
-              '<td class="manager-hidden">&nbsp;</td>';
+        var rateCell;
+
+        if (hideFinancials) {
+            rateCell = '<td class="manager-hidden">&nbsp;</td>' +
+                '<td class="manager-hidden">&nbsp;</td>' +
+                '<td class="manager-hidden">&nbsp;</td>';
+        } else if (isVendorMode) {
+            rateCell = '<td><div class="inpBx"><input type="text" placeholder="Rate" class="txtfld itemRateInput"/></div></td>' +
+                '<td><div class="inpBx"><input type="text" placeholder="Amt" class="txtfld itemAmtInput" readonly/></div></td>' +
+                '<td>&nbsp;</td>';
+        } else {
+            rateCell = '<td class="manager-hidden"><div class="inpBx"><input type="text" placeholder="" class="txtfld itemRateInput"/></div></td>' +
+                '<td class="manager-hidden"><div class="inpBx"><input type="text" placeholder="" class="txtfld itemAmtInput" readonly/></div></td>' +
+                '<td class="manager-hidden">&nbsp;</td>';
+        }
 
         return (
             '<tr class="item-row">' +
@@ -636,6 +644,7 @@
             return;
         }
 
+        estimateData = data;
         isRestoring = true;
 
         try {
@@ -1947,24 +1956,25 @@
 
         (estimateData.groups || []).forEach(function (group) {
             (group.items || []).forEach(function (item) {
-                var key = String(item.name || '').toUpperCase();
+                var key = String(item.name || '').toUpperCase().replace(/\s+/g, ' ').trim();
 
-                if (key) {
-                    itemsByName[key] = item.b2vRate != null ? String(item.b2vRate) : '';
+                if (key && item.b2vRate != null && String(item.b2vRate).trim() !== '') {
+                    itemsByName[key] = String(item.b2vRate).trim();
                 }
             });
         });
 
         table.querySelectorAll('tr.item-row').forEach(function (row) {
-            var nameInput = row.querySelector('.itemNameInput');
-            var key = nameInput ? String(nameInput.value || '').toUpperCase() : '';
-
-            if (key && Object.prototype.hasOwnProperty.call(itemsByName, key)) {
-                row._b2vRate = itemsByName[key];
+            if (row._b2vRate !== undefined && row._b2vRate !== null && String(row._b2vRate).trim() !== '') {
                 return;
             }
 
-            row._b2vRate = getB2vRateForRow(row);
+            var nameInput = row.querySelector('.itemNameInput');
+            var key = nameInput ? String(nameInput.value || '').toUpperCase().replace(/\s+/g, ' ').trim() : '';
+
+            if (key && Object.prototype.hasOwnProperty.call(itemsByName, key)) {
+                row._b2vRate = itemsByName[key];
+            }
         });
     }
 
@@ -1973,9 +1983,30 @@
             return;
         }
 
+        var ratesByName = {};
+
+        (estimateData.groups || []).forEach(function (group) {
+            (group.items || []).forEach(function (item) {
+                var key = String(item.name || '').toUpperCase().replace(/\s+/g, ' ').trim();
+                var rate = item.rate != null ? String(item.rate).trim() : '';
+
+                if (key && rate !== '') {
+                    ratesByName[key] = rate;
+                }
+            });
+        });
+
         table.querySelectorAll('tr.item-row').forEach(function (row) {
             var rateInput = row.querySelector('.itemRateInput');
-            var b2v = getB2vRateForRow(row);
+            var nameInput = row.querySelector('.itemNameInput');
+            var key = nameInput ? String(nameInput.value || '').toUpperCase().replace(/\s+/g, ' ').trim() : '';
+            var b2v = '';
+
+            if (key && Object.prototype.hasOwnProperty.call(ratesByName, key)) {
+                b2v = ratesByName[key];
+            } else {
+                b2v = getB2vRateForRow(row);
+            }
 
             if (rateInput) {
                 rateInput.value = b2v;
@@ -2008,6 +2039,14 @@
             && row._selectedItem.b2v_rate !== null
             && String(row._selectedItem.b2v_rate).trim() !== '') {
             return String(row._selectedItem.b2v_rate).trim();
+        }
+
+        if (isVendorMode) {
+            var rateInput = row.querySelector('.itemRateInput');
+
+            if (rateInput && String(rateInput.value || '').trim() !== '') {
+                return String(rateInput.value).trim();
+            }
         }
 
         return '';
@@ -2075,6 +2114,22 @@
         };
     }
 
+    function openVendorRequirementForm(data) {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = getAppPath('vendor_requirement.php');
+        form.target = '_blank';
+
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'data';
+        input.value = JSON.stringify(data);
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    }
+
     function submitVendorRequirement(table) {
         syncB2vRatesFromEnrichedEstimateData(table);
 
@@ -2085,19 +2140,7 @@
             return;
         }
 
-        var form = document.createElement('form');
-        form.method = 'POST';
-        form.action = getAppPath('vendor_requirement.php');
-        form.target = '_blank';
-
-        var input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'data';
-        input.value = JSON.stringify(payload);
-        form.appendChild(input);
-        document.body.appendChild(form);
-        form.submit();
-        document.body.removeChild(form);
+        openVendorRequirementForm(payload);
     }
 
     function exportVendorRequirement(table) {

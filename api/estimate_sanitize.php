@@ -157,7 +157,7 @@ function estimate_fetch_catalog_item_by_name($conn, string $itemName): ?array
     $stmt = $conn->prepare(
         'SELECT id, item_name, unit, b2b_rate, d2c_rate, b2v_rate
          FROM estimate_item
-         WHERE UPPER(item_name) = UPPER(?) AND is_hidden = 0
+         WHERE UPPER(TRIM(item_name)) = UPPER(?) AND is_hidden = 0
          LIMIT 1'
     );
 
@@ -180,7 +180,79 @@ function estimate_fetch_catalog_item_by_name($conn, string $itemName): ?array
 
 function estimate_normalize_item_name($name): string
 {
-    return strtoupper(trim((string) $name));
+    $name = strtoupper(trim((string) $name));
+
+    return preg_replace('/\s+/u', ' ', $name) ?? $name;
+}
+
+/**
+ * Load all visible catalog items indexed by id and normalized name.
+ *
+ * @return array{byId: array<int, array>, byName: array<string, array>}
+ */
+function estimate_build_catalog_index($conn): array
+{
+    $index = [
+        'byId' => [],
+        'byName' => [],
+    ];
+
+    if (!$conn) {
+        return $index;
+    }
+
+    estimate_ensure_item_table($conn);
+
+    $result = $conn->query(
+        'SELECT id, item_name, unit, b2b_rate, d2c_rate, b2v_rate
+         FROM estimate_item
+         WHERE is_hidden = 0'
+    );
+
+    if (!$result) {
+        return $index;
+    }
+
+    while ($row = $result->fetch_assoc()) {
+        $item = estimate_normalize_catalog_item_row($row);
+        $index['byId'][$item['id']] = $item;
+
+        $nameKey = estimate_normalize_item_name($item['item_name']);
+
+        if ($nameKey !== '' && !isset($index['byName'][$nameKey])) {
+            $index['byName'][$nameKey] = $item;
+        }
+    }
+
+    return $index;
+}
+
+function estimate_resolve_catalog_item_from_index(array $item, array $index): ?array
+{
+    $selectedItem = $item['selectedItem'] ?? null;
+    $itemName = estimate_normalize_item_name($item['name'] ?? '');
+
+    if (is_array($selectedItem) && !empty($selectedItem['id'])) {
+        $id = (int) $selectedItem['id'];
+
+        if (isset($index['byId'][$id])) {
+            return $index['byId'][$id];
+        }
+    }
+
+    if ($itemName !== '' && isset($index['byName'][$itemName])) {
+        return $index['byName'][$itemName];
+    }
+
+    if (is_array($selectedItem)) {
+        $selectedName = estimate_normalize_item_name($selectedItem['item_name'] ?? '');
+
+        if ($selectedName !== '' && isset($index['byName'][$selectedName])) {
+            return $index['byName'][$selectedName];
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -215,7 +287,16 @@ function estimate_resolve_catalog_item(array $item, $conn): ?array
     }
 
     if ($itemName !== '') {
-        return estimate_fetch_catalog_item_by_name($conn, $itemName);
+        $catalogItem = estimate_fetch_catalog_item_by_name($conn, $itemName);
+
+        if ($catalogItem) {
+            return $catalogItem;
+        }
+    }
+
+    // Row name may have been edited after autocomplete; still resolve B2V from catalog id.
+    if (is_array($selectedItem) && !empty($selectedItem['id'])) {
+        return estimate_fetch_catalog_item($conn, (int) $selectedItem['id']);
     }
 
     return null;
@@ -512,6 +593,8 @@ function estimate_enrich_b2v_rates(array $data, $conn): array
         return $data;
     }
 
+    $catalogIndex = estimate_build_catalog_index($conn);
+
     foreach ($data['groups'] as $groupIndex => $group) {
         if (empty($group['items']) || !is_array($group['items'])) {
             continue;
@@ -522,7 +605,12 @@ function estimate_enrich_b2v_rates(array $data, $conn): array
                 continue;
             }
 
-            $catalogItem = estimate_resolve_catalog_item($item, $conn);
+            $catalogItem = estimate_resolve_catalog_item_from_index($item, $catalogIndex);
+
+            if (!$catalogItem) {
+                $catalogItem = estimate_resolve_catalog_item($item, $conn);
+            }
+
             $data['groups'][$groupIndex]['items'][$itemIndex]['b2vRate'] = $catalogItem
                 ? estimate_get_catalog_rate($catalogItem, 'b2v')
                 : '';
@@ -547,6 +635,8 @@ function vendor_requirement_prepare_data(array $data, $conn): array
         return $data;
     }
 
+    $catalogIndex = estimate_build_catalog_index($conn);
+
     foreach ($data['groups'] as $groupIndex => $group) {
         if (empty($group['items']) || !is_array($group['items'])) {
             continue;
@@ -557,7 +647,12 @@ function vendor_requirement_prepare_data(array $data, $conn): array
                 continue;
             }
 
-            $catalogItem = estimate_resolve_catalog_item($item, $conn);
+            $catalogItem = estimate_resolve_catalog_item_from_index($item, $catalogIndex);
+
+            if (!$catalogItem) {
+                $catalogItem = estimate_resolve_catalog_item($item, $conn);
+            }
+
             $b2v = $catalogItem ? trim(estimate_get_catalog_rate($catalogItem, 'b2v')) : '';
 
             unset($data['groups'][$groupIndex]['items'][$itemIndex]['b2vRate']);

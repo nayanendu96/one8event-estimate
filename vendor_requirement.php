@@ -21,8 +21,6 @@ if (empty($estimateData['groups']) || !is_array($estimateData['groups'])) {
     exit;
 }
 
-$estimateData = vendor_requirement_prepare_data($estimateData, $conn);
-
 $categories = [];
 $categoryResult = $conn->query('SELECT id, name FROM estimate_category ORDER BY id ASC');
 

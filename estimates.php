@@ -47,6 +47,13 @@ foreach ($allEstimates as $estimateRow) {
 
 $conn->close();
 $estimatesPageUrl = 'estimates.php';
+$todayIst = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('Y-m-d');
+$acceptedAmountTotal = 0;
+if ($activeTab === 'accepted') {
+    foreach ($estimates as $estimateRow) {
+        $acceptedAmountTotal += (float) $estimateRow['grand_total'];
+    }
+}
 ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -54,7 +61,7 @@ $estimatesPageUrl = 'estimates.php';
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <title>All Estimates - ONE8 EVENT</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link href="css/style.css?v=3" rel="stylesheet" type="text/css" />
+<link href="css/style.css?v=5" rel="stylesheet" type="text/css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 <body data-estimates-tab="<?php echo htmlspecialchars($activeTab, ENT_QUOTES, 'UTF-8'); ?>">
@@ -90,6 +97,36 @@ $estimatesPageUrl = 'estimates.php';
         <?php if (empty($estimates)) : ?>
             <p class="estimatesEmpty">No <?php echo htmlspecialchars(strtolower(estimate_workflow_status_label($activeTab)), ENT_QUOTES, 'UTF-8'); ?> estimates.</p>
         <?php else : ?>
+        <?php if ($activeTab === 'accepted' && estimate_is_admin()) : ?>
+        <div
+            class="acceptedFilterBar"
+            data-today="<?php echo htmlspecialchars($todayIst, ENT_QUOTES, 'UTF-8'); ?>"
+        >
+            <div class="acceptedFilterControls">
+                <span class="acceptedFilterLabel">Show</span>
+                <div class="acceptedFilterPills" role="group" aria-label="Accepted date range">
+                    <button type="button" class="acceptedFilterPill is-active" data-range="all" aria-pressed="true">All</button>
+                    <button type="button" class="acceptedFilterPill" data-range="this_month" aria-pressed="false">This month</button>
+                    <button type="button" class="acceptedFilterPill" data-range="previous_month" aria-pressed="false">Previous month</button>
+                    <button type="button" class="acceptedFilterPill" data-range="custom" aria-pressed="false">Custom range</button>
+                </div>
+                <div class="acceptedCustomRange" hidden>
+                    <label class="acceptedCustomRangeField">
+                        <span>From</span>
+                        <input type="date" class="acceptedDateFrom" max="<?php echo htmlspecialchars($todayIst, ENT_QUOTES, 'UTF-8'); ?>">
+                    </label>
+                    <label class="acceptedCustomRangeField">
+                        <span>To</span>
+                        <input type="date" class="acceptedDateTo" max="<?php echo htmlspecialchars($todayIst, ENT_QUOTES, 'UTF-8'); ?>">
+                    </label>
+                </div>
+            </div>
+            <div class="acceptedFilterTotal">
+                Amount total: <span class="acceptedAmountTotal"><?php echo number_format($acceptedAmountTotal, 0, '.', ','); ?></span>
+            </div>
+        </div>
+        <p class="estimatesEmpty acceptedFilterEmpty" hidden>No accepted estimates in this date range.</p>
+        <?php endif; ?>
         <div class="estimatesTableWrap">
             <table class="estimatesTable">
                 <thead>
@@ -116,8 +153,14 @@ $estimatesPageUrl = 'estimates.php';
                         $workflowStatus = estimate_workflow_status_normalize($estimate['workflow_status'] ?? 'open');
                         $id = htmlspecialchars($estimate['id'], ENT_QUOTES, 'UTF-8');
                         $tabRedirect = $estimatesPageUrl . '?tab=' . rawurlencode($activeTab);
+                        $updatedNormalized = estimate_normalize_updated_at($estimate['updated_at'] ?? '');
+                        $updatedDate = $updatedNormalized !== '' ? substr($updatedNormalized, 0, 10) : '';
                         ?>
-                        <tr data-workflow-status="<?php echo htmlspecialchars($workflowStatus, ENT_QUOTES, 'UTF-8'); ?>">
+                        <tr
+                            data-workflow-status="<?php echo htmlspecialchars($workflowStatus, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-updated-at="<?php echo htmlspecialchars($updatedDate, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-grand-total="<?php echo htmlspecialchars((string) $grandTotal, ENT_QUOTES, 'UTF-8'); ?>"
+                        >
                             <td><?php echo $company !== '' ? htmlspecialchars($company, ENT_QUOTES, 'UTF-8') : '—'; ?></td>
                             <td><?php echo $projectOwner !== '' ? htmlspecialchars($projectOwner, ENT_QUOTES, 'UTF-8') : '—'; ?></td>
                             <td>
@@ -214,6 +257,148 @@ $estimatesPageUrl = 'estimates.php';
 <script>
 (function () {
     var currentTab = document.body.getAttribute('data-estimates-tab') || 'open';
+    var acceptedFilterBar = document.querySelector('.acceptedFilterBar');
+    var acceptedFilterEmpty = document.querySelector('.acceptedFilterEmpty');
+    var acceptedAmountTotalEl = document.querySelector('.acceptedAmountTotal');
+    var acceptedCustomRange = document.querySelector('.acceptedCustomRange');
+    var acceptedDateFrom = document.querySelector('.acceptedDateFrom');
+    var acceptedDateTo = document.querySelector('.acceptedDateTo');
+    var acceptedRange = 'all';
+
+    function pad2(value) {
+        return value < 10 ? '0' + value : String(value);
+    }
+
+    function formatYmd(date) {
+        return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate());
+    }
+
+    function parseYmd(value) {
+        var parts = String(value || '').split('-');
+        if (parts.length !== 3) {
+            return null;
+        }
+
+        var year = parseInt(parts[0], 10);
+        var month = parseInt(parts[1], 10);
+        var day = parseInt(parts[2], 10);
+        if (!year || !month || !day) {
+            return null;
+        }
+
+        return new Date(year, month - 1, day);
+    }
+
+    function formatAmount(value) {
+        var rounded = Math.round(Number(value) || 0);
+        var sign = rounded < 0 ? '-' : '';
+        var digits = String(Math.abs(rounded));
+        return sign + digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    function monthBounds(offset) {
+        var todayAttr = acceptedFilterBar ? acceptedFilterBar.getAttribute('data-today') : '';
+        var today = parseYmd(todayAttr) || new Date();
+        var start = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+        var end = new Date(today.getFullYear(), today.getMonth() + offset + 1, 0);
+        return { from: formatYmd(start), to: formatYmd(end) };
+    }
+
+    function currentAcceptedRange() {
+        if (acceptedRange === 'this_month') {
+            return monthBounds(0);
+        }
+
+        if (acceptedRange === 'previous_month') {
+            return monthBounds(-1);
+        }
+
+        if (acceptedRange === 'custom') {
+            var from = acceptedDateFrom && acceptedDateFrom.value ? acceptedDateFrom.value : '';
+            var to = acceptedDateTo && acceptedDateTo.value ? acceptedDateTo.value : '';
+            if (from && to && from > to) {
+                return { from: to, to: from };
+            }
+            return { from: from, to: to };
+        }
+
+        return { from: '', to: '' };
+    }
+
+    function applyAcceptedFilter() {
+        if (!acceptedFilterBar) {
+            return;
+        }
+
+        var range = currentAcceptedRange();
+        var rows = document.querySelectorAll('.estimatesTable tbody tr');
+        var visibleCount = 0;
+        var total = 0;
+
+        rows.forEach(function (row) {
+            var date = row.getAttribute('data-updated-at') || '';
+            var inRange = true;
+
+            if (range.from && (!date || date < range.from)) {
+                inRange = false;
+            }
+
+            if (range.to && (!date || date > range.to)) {
+                inRange = false;
+            }
+
+            row.hidden = !inRange;
+            if (inRange) {
+                visibleCount += 1;
+                total += parseFloat(row.getAttribute('data-grand-total')) || 0;
+            }
+        });
+
+        if (acceptedAmountTotalEl) {
+            acceptedAmountTotalEl.textContent = formatAmount(total);
+        }
+
+        if (acceptedFilterEmpty) {
+            acceptedFilterEmpty.hidden = visibleCount > 0 || rows.length === 0;
+        }
+
+        var wrap = document.querySelector('.estimatesTableWrap');
+        if (wrap) {
+            wrap.hidden = visibleCount === 0 && rows.length > 0;
+        }
+    }
+
+    if (acceptedFilterBar) {
+        acceptedFilterBar.querySelectorAll('.acceptedFilterPill').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var range = button.getAttribute('data-range');
+                if (!range || range === acceptedRange) {
+                    return;
+                }
+
+                acceptedRange = range;
+                acceptedFilterBar.querySelectorAll('.acceptedFilterPill').forEach(function (item) {
+                    var isActive = item === button;
+                    item.classList.toggle('is-active', isActive);
+                    item.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                });
+
+                if (acceptedCustomRange) {
+                    acceptedCustomRange.hidden = range !== 'custom';
+                }
+
+                applyAcceptedFilter();
+            });
+        });
+
+        if (acceptedDateFrom) {
+            acceptedDateFrom.addEventListener('change', applyAcceptedFilter);
+        }
+
+        if (acceptedDateTo) {
+            acceptedDateTo.addEventListener('change', applyAcceptedFilter);
+        }
+    }
 
     function updateTabCount(tab, delta) {
         var countEl = document.querySelector('.estimatesTabCount[data-tab-count="' + tab + '"]');
@@ -228,12 +413,23 @@ $estimatesPageUrl = 'estimates.php';
     function showTabEmptyMessage() {
         var table = document.querySelector('.estimatesTable');
         if (table && table.querySelector('tbody tr')) {
+            applyAcceptedFilter();
             return;
         }
 
         var wrap = document.querySelector('.estimatesTableWrap');
         if (wrap) {
             wrap.remove();
+        }
+
+        if (acceptedFilterBar) {
+            acceptedFilterBar.remove();
+            acceptedFilterBar = null;
+        }
+
+        if (acceptedFilterEmpty) {
+            acceptedFilterEmpty.remove();
+            acceptedFilterEmpty = null;
         }
 
         if (document.querySelector('.estimatesTabEmptyMessage')) {
