@@ -105,26 +105,28 @@ if ($lockStmt) {
     }
 }
 
-if (estimate_is_manager()) {
-    $existingData = null;
+$existingData = null;
+$existingProjectType = '';
 
-    if (!$isNew) {
-        $existingStmt = $conn->prepare('SELECT data FROM estimates WHERE id = ? AND is_deleted = 0');
+if (!$isNew) {
+    $existingStmt = $conn->prepare('SELECT data, project_type FROM estimates WHERE id = ? AND is_deleted = 0');
 
-        if ($existingStmt) {
-            $existingStmt->bind_param('s', $id);
-            $existingStmt->execute();
-            $existingResult = $existingStmt->get_result();
-            $existingRow = $existingResult ? $existingResult->fetch_assoc() : null;
-            $existingStmt->close();
+    if ($existingStmt) {
+        $existingStmt->bind_param('s', $id);
+        $existingStmt->execute();
+        $existingResult = $existingStmt->get_result();
+        $existingRow = $existingResult ? $existingResult->fetch_assoc() : null;
+        $existingStmt->close();
 
-            if ($existingRow) {
-                $decodedExisting = json_decode($existingRow['data'], true);
-                $existingData = is_array($decodedExisting) ? $decodedExisting : null;
-            }
+        if ($existingRow) {
+            $decodedExisting = json_decode($existingRow['data'], true);
+            $existingData = is_array($decodedExisting) ? $decodedExisting : null;
+            $existingProjectType = trim((string) ($existingRow['project_type'] ?? ''));
         }
     }
+}
 
+if (estimate_is_manager()) {
     if (is_array($existingData)) {
         $data['discount'] = $existingData['discount'] ?? '0';
         $data['discountVisible'] = $existingData['discountVisible'] ?? false;
@@ -133,6 +135,9 @@ if (estimate_is_manager()) {
     $data = estimate_rebuild_financial_fields($data, $existingData, $conn);
     $grandTotal = estimate_calculate_grand_total($data);
 }
+
+$data = estimate_preserve_admin_header_fields($data, $existingData, $existingProjectType);
+$projectType = trim((string) ($data['header']['projectType'] ?? $existingProjectType));
 
 $jsonData = json_encode($data, JSON_UNESCAPED_UNICODE);
 
