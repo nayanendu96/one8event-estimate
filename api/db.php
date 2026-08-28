@@ -450,6 +450,33 @@ function estimate_workflow_status_label(string $status): string
     return $labels[$status] ?? 'Open';
 }
 
+function estimate_company_brand_html(): string
+{
+    return '<div class="companyBrand">'
+        . '<div class="companyBrandTitle"><span class="tclr01">WOAN</span> <span class="tclr02">EIGHT</span> EVENT PRIVATE LIMITED</div>'
+        . '<div class="companyBrandAddress">'
+        . '<div>GE-171, Rajdanga Main Road, Sector G, East Kolkata Twp, Kolkata, West Bengal 700107</div>'
+        . '<div>Landline: +91 3365982843 &nbsp; Phone: +91 9800821100</div>'
+        . '</div>'
+        . '</div>';
+}
+
+function estimate_preserve_admin_header_fields(array $incoming, $existing, string $existingProjectType = ''): array
+{
+    if (!isset($incoming['header']) || !is_array($incoming['header'])) {
+        $incoming['header'] = [];
+    }
+
+    $existingHeader = (is_array($existing) && is_array($existing['header'] ?? null))
+        ? $existing['header']
+        : [];
+
+    $incoming['header']['projectType'] = trim((string) ($existingHeader['projectType'] ?? $existingProjectType));
+    $incoming['header']['projectOwner'] = trim((string) ($existingHeader['projectOwner'] ?? ''));
+
+    return $incoming;
+}
+
 function estimate_extract_project_owner($dataJson): string
 {
     $data = json_decode((string) $dataJson, true);
@@ -459,6 +486,93 @@ function estimate_extract_project_owner($dataJson): string
     }
 
     return trim((string) ($data['header']['projectOwner'] ?? ''));
+}
+
+function estimate_extract_event_date($dataJson): string
+{
+    $data = json_decode((string) $dataJson, true);
+
+    if (!is_array($data)) {
+        return '';
+    }
+
+    return trim((string) ($data['header']['eventDate'] ?? ''));
+}
+
+function estimate_parse_event_date_ymd($value): string
+{
+    $value = trim((string) $value);
+
+    if ($value === '') {
+        return '';
+    }
+
+    $value = preg_replace('/(\d+)(st|nd|rd|th)\b/i', '$1', $value);
+    $value = preg_replace('/\s+/', ' ', $value);
+
+    $formats = [
+        'Y-m-d',
+        'Y/m/d',
+        'd/m/Y',
+        'j/n/Y',
+        'd-m-Y',
+        'j-n-Y',
+        'd.m.Y',
+        'j.n.Y',
+        'd/m/y',
+        'j/n/y',
+        'd-m-y',
+        'j-n-y',
+        'd.m.y',
+        'j.n.y',
+        'd M Y',
+        'j M Y',
+        'd M y',
+        'j M y',
+        'd F Y',
+        'j F Y',
+        'd F y',
+        'j F y',
+        'M d Y',
+        'M j Y',
+        'F d Y',
+        'F j Y',
+        'M d, Y',
+        'M j, Y',
+        'F d, Y',
+        'F j, Y',
+    ];
+
+    $timezone = new DateTimeZone('Asia/Kolkata');
+
+    foreach ($formats as $format) {
+        $date = DateTimeImmutable::createFromFormat('!' . $format, $value, $timezone);
+        if (!$date instanceof DateTimeImmutable) {
+            continue;
+        }
+
+        $errors = DateTimeImmutable::getLastErrors();
+        if (is_array($errors) && (($errors['warning_count'] ?? 0) > 0 || ($errors['error_count'] ?? 0) > 0)) {
+            continue;
+        }
+
+        return $date->format('Y-m-d');
+    }
+
+    return '';
+}
+
+function estimate_format_event_date($value): string
+{
+    $ymd = estimate_parse_event_date_ymd($value);
+
+    if ($ymd !== '') {
+        return estimate_format_datetime($ymd, 'd M Y');
+    }
+
+    $value = trim((string) $value);
+
+    return $value !== '' ? htmlspecialchars($value, ENT_QUOTES, 'UTF-8') : '';
 }
 
 function estimate_ensure_item_table($conn)

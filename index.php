@@ -72,6 +72,9 @@ if (!empty($estimateData)) {
     $estimateData = estimate_enrich_b2v_rates($estimateData, $conn);
 }
 
+$todayIst = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('d/m/Y');
+$defaultQuotationDate = $estimateId === '' ? $todayIst : '';
+
 function renderCategorySelect(array $categories, $selectedId = '')
 {
     $html = '<select class="categorySelect">';
@@ -169,12 +172,12 @@ function renderEstimateGroup(array $categories, $isManager = false)
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 
-<title>Estimate By ONE8 EVENT X</title>
+<title>Estimate By WOAN EIGHT EVENT</title>
 <meta name="HandheldFriendly" content="true">
 <meta name="viewport" content="width=device-width, initial-scale=0.666667, maximum-scale=0.666667, user-scalable=0">
 <meta name="viewport" content="width=device-width">
 
-<link href="css/style.css" rel="stylesheet" type="text/css" />
+<link href="css/style.css?v=6" rel="stylesheet" type="text/css" />
 <link href="css/print.css" rel="stylesheet" media="print" />
 <style media="print">
   .frmTable table {
@@ -201,7 +204,7 @@ function renderEstimateGroup(array $categories, $isManager = false)
     var estimateUpdatedAt = <?php echo json_encode($estimateUpdatedAt, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var estimateEditToken = <?php echo json_encode($editTokenFromUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
-<script src="js/estimate.js" defer></script>
+<script src="js/estimate.js?v=6" defer></script>
 
 </head>
 <body<?php
@@ -268,7 +271,7 @@ function renderEstimateGroup(array $categories, $isManager = false)
                 <div class="estimateSaveStatus is-hidden no-print" role="status" aria-live="polite" aria-hidden="true"></div>
             </div>
             <div class="hdClm02">
-                <span class="tclr01">ONE</span><span class="tclr02">8</span> EVENT
+                <?php echo estimate_company_brand_html(); ?>
             </div>
             <div class="hdClm03">
                 <img height="20" src="image/front_print_size-01.png">
@@ -278,14 +281,14 @@ function renderEstimateGroup(array $categories, $isManager = false)
         <div class="hData">
             <table>
                 <tr>
-                    <th style="border-right: none;">PROJECT TYPE</th>
-                    <td style="border-left: none; border-right: none;"><input type="text" placeholder="" class="txtfld projectTypeInput"></td>
-                    <th style="border-right: none; border-left: none;">COMPANY NAME</th>
-                    <td style="border-left: none;"><input type="text" placeholder="" class="txtfld companyNameInput"></td>
+                    <th style="border-right: none;">ORGANISATION NAME</th>
+                    <td style="border-left: none; border-right: none;"><input type="text" placeholder="" class="txtfld companyNameInput"></td>
+                    <th style="border-right: none; border-left: none;">QUOTATION DATE</th>
+                    <td style="border-left: none;"><input type="text" placeholder="" class="txtfld quotationDateInput" value="<?php echo htmlspecialchars($defaultQuotationDate, ENT_QUOTES, 'UTF-8'); ?>"></td>
                 </tr>
                 <tr>
-                    <th style="border-right: none;">PROJECT OWNER</th>
-                    <td style="border-left: none; border-right: none;"><input type="text" placeholder="" class="txtfld projectOwnerInput"></td>
+                    <th style="border-right: none;">ORGANISATION ADDRESS</th>
+                    <td style="border-left: none; border-right: none;"><input type="text" placeholder="" class="txtfld organisationAddressInput"></td>
                     <th style="border-right: none; border-left: none;">EVENT DATE</th>
                     <td style="border-left: none;"><input type="text" placeholder="" class="txtfld eventDateInput"></td>
                 </tr>

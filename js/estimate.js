@@ -30,7 +30,7 @@
     var editHeartbeatTimer = null;
     var LIVE_POLL_MS = 5000;
     var EDIT_HEARTBEAT_MS = 60000;
-    var DEFAULT_DOCUMENT_TITLE = appConfig.documentTitle || 'Estimate by ONE8 EVENT X';
+    var DEFAULT_DOCUMENT_TITLE = appConfig.documentTitle || 'Estimate by WOAN EIGHT EVENT';
 
     var ones = [
         '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
@@ -59,6 +59,32 @@
         var num = parseFloat(String(value || '').replace(/,/g, '').trim());
 
         return isNaN(num) ? 0 : num;
+    }
+
+    function existingHeaderValue(key) {
+        if (!estimateData || !estimateData.header || estimateData.header[key] == null) {
+            return '';
+        }
+
+        return String(estimateData.header[key]);
+    }
+
+    function headerFieldValue(selector, key) {
+        var input = document.querySelector(selector);
+
+        if (input) {
+            return input.value;
+        }
+
+        return existingHeaderValue(key);
+    }
+
+    function setHeaderFieldValue(selector, value) {
+        var input = document.querySelector(selector);
+
+        if (input) {
+            input.value = value || '';
+        }
     }
 
     function uppercaseInput(input) {
@@ -482,18 +508,16 @@
 
         var discountInput = table.querySelector('.discountInput');
         var discount = discountInput ? discountInput.value : savedDiscount;
-        var projectTypeInput = document.querySelector('.projectTypeInput');
-        var companyNameInput = document.querySelector('.companyNameInput');
-        var projectOwnerInput = document.querySelector('.projectOwnerInput');
-        var eventDateInput = document.querySelector('.eventDateInput');
 
         var state = {
             rateMode: isVendorMode ? 'b2v' : rateMode,
             header: {
-                projectType: projectTypeInput ? projectTypeInput.value : '',
-                companyName: companyNameInput ? companyNameInput.value : '',
-                projectOwner: projectOwnerInput ? projectOwnerInput.value : '',
-                eventDate: eventDateInput ? eventDateInput.value : ''
+                projectType: headerFieldValue('.projectTypeInput', 'projectType'),
+                companyName: headerFieldValue('.companyNameInput', 'companyName'),
+                organisationAddress: headerFieldValue('.organisationAddressInput', 'organisationAddress'),
+                projectOwner: headerFieldValue('.projectOwnerInput', 'projectOwner'),
+                eventDate: headerFieldValue('.eventDateInput', 'eventDate'),
+                quotationDate: headerFieldValue('.quotationDateInput', 'quotationDate')
             },
             groups: groups
         };
@@ -649,26 +673,12 @@
 
         try {
             if (data.header) {
-                var projectTypeInput = document.querySelector('.projectTypeInput');
-                var companyNameInput = document.querySelector('.companyNameInput');
-                var projectOwnerInput = document.querySelector('.projectOwnerInput');
-                var eventDateInput = document.querySelector('.eventDateInput');
-
-                if (projectTypeInput) {
-                    projectTypeInput.value = data.header.projectType || '';
-                }
-
-                if (companyNameInput) {
-                    companyNameInput.value = data.header.companyName || '';
-                }
-
-                if (projectOwnerInput) {
-                    projectOwnerInput.value = data.header.projectOwner || '';
-                }
-
-                if (eventDateInput) {
-                    eventDateInput.value = data.header.eventDate || '';
-                }
+                setHeaderFieldValue('.projectTypeInput', data.header.projectType);
+                setHeaderFieldValue('.companyNameInput', data.header.companyName);
+                setHeaderFieldValue('.organisationAddressInput', data.header.organisationAddress);
+                setHeaderFieldValue('.projectOwnerInput', data.header.projectOwner);
+                setHeaderFieldValue('.eventDateInput', data.header.eventDate);
+                setHeaderFieldValue('.quotationDateInput', data.header.quotationDate);
             }
 
             discountEditing = !!data.discountVisible;
@@ -2220,7 +2230,7 @@
                 updateDocumentTitle();
             }
 
-            if (event.target.matches('.projectTypeInput, .projectOwnerInput, .eventDateInput, .companyNameInput')) {
+            if (event.target.matches('.projectTypeInput, .projectOwnerInput, .eventDateInput, .companyNameInput, .organisationAddressInput, .quotationDateInput')) {
                 var tableEl = document.querySelector('.frmTable table');
 
                 if (tableEl) {

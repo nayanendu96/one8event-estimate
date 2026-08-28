@@ -61,7 +61,7 @@ if ($activeTab === 'accepted') {
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <title>All Estimates - ONE8 EVENT</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link href="css/style.css?v=5" rel="stylesheet" type="text/css" />
+<link href="css/style.css?v=6" rel="stylesheet" type="text/css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 <body data-estimates-tab="<?php echo htmlspecialchars($activeTab, ENT_QUOTES, 'UTF-8'); ?>">
@@ -135,6 +135,7 @@ if ($activeTab === 'accepted') {
                         <th>Project Owner</th>
                         <th>Phone</th>
                         <th>Project Type</th>
+                        <th>Event Date</th>
                         <th>Grand Total</th>
                         <th>Lock</th>
                         <th>Status</th>
@@ -153,16 +154,28 @@ if ($activeTab === 'accepted') {
                         $workflowStatus = estimate_workflow_status_normalize($estimate['workflow_status'] ?? 'open');
                         $id = htmlspecialchars($estimate['id'], ENT_QUOTES, 'UTF-8');
                         $tabRedirect = $estimatesPageUrl . '?tab=' . rawurlencode($activeTab);
-                        $updatedNormalized = estimate_normalize_updated_at($estimate['updated_at'] ?? '');
-                        $updatedDate = $updatedNormalized !== '' ? substr($updatedNormalized, 0, 10) : '';
+                        $eventDateRaw = estimate_extract_event_date($estimate['data'] ?? '');
+                        $eventDateYmd = estimate_parse_event_date_ymd($eventDateRaw);
+                        $eventDateDisplay = estimate_format_event_date($eventDateRaw);
                         ?>
                         <tr
                             data-workflow-status="<?php echo htmlspecialchars($workflowStatus, ENT_QUOTES, 'UTF-8'); ?>"
-                            data-updated-at="<?php echo htmlspecialchars($updatedDate, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-event-date="<?php echo htmlspecialchars($eventDateYmd, ENT_QUOTES, 'UTF-8'); ?>"
                             data-grand-total="<?php echo htmlspecialchars((string) $grandTotal, ENT_QUOTES, 'UTF-8'); ?>"
                         >
                             <td><?php echo $company !== '' ? htmlspecialchars($company, ENT_QUOTES, 'UTF-8') : '—'; ?></td>
-                            <td><?php echo $projectOwner !== '' ? htmlspecialchars($projectOwner, ENT_QUOTES, 'UTF-8') : '—'; ?></td>
+                            <td>
+                                <input
+                                    type="text"
+                                    class="estimateListTextInput estimateListProjectOwnerInput"
+                                    data-id="<?php echo $id; ?>"
+                                    data-field="project_owner"
+                                    value="<?php echo htmlspecialchars($projectOwner, ENT_QUOTES, 'UTF-8'); ?>"
+                                    placeholder="Add owner"
+                                    maxlength="255"
+                                    autocomplete="off"
+                                >
+                            </td>
                             <td>
                                 <input
                                     type="text"
@@ -174,7 +187,19 @@ if ($activeTab === 'accepted') {
                                     autocomplete="off"
                                 >
                             </td>
-                            <td><?php echo $projectType !== '' ? htmlspecialchars($projectType, ENT_QUOTES, 'UTF-8') : '—'; ?></td>
+                            <td>
+                                <input
+                                    type="text"
+                                    class="estimateListTextInput estimateListProjectTypeInput"
+                                    data-id="<?php echo $id; ?>"
+                                    data-field="project_type"
+                                    value="<?php echo htmlspecialchars($projectType, ENT_QUOTES, 'UTF-8'); ?>"
+                                    placeholder="Add type"
+                                    maxlength="255"
+                                    autocomplete="off"
+                                >
+                            </td>
+                            <td><?php echo $eventDateDisplay !== '' ? $eventDateDisplay : '—'; ?></td>
                             <td><?php echo number_format($grandTotal, 0, '.', ','); ?></td>
                             <td>
                                 <span class="estimateStatusBadge estimateLockBadge<?php echo $isLocked ? ' is-locked' : ' is-unlocked'; ?>" title="Edit lock">
@@ -336,7 +361,7 @@ if ($activeTab === 'accepted') {
         var total = 0;
 
         rows.forEach(function (row) {
-            var date = row.getAttribute('data-updated-at') || '';
+            var date = row.getAttribute('data-event-date') || '';
             var inRange = true;
 
             if (range.from && (!date || date < range.from)) {
@@ -470,6 +495,54 @@ if ($activeTab === 'accepted') {
         });
     }
 
+    function bindListFieldSave(input, saveRequest) {
+        var lastSaved = input.value;
+
+        function saveField() {
+            var id = input.getAttribute('data-id');
+            var value = input.value.trim();
+
+            if (value === lastSaved) {
+                return;
+            }
+
+            input.classList.remove('is-saved', 'is-error');
+            input.classList.add('is-saving');
+
+            saveRequest(id, value).then(function (response) {
+                return response.json().then(function (data) {
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Save failed');
+                    }
+                    return data;
+                });
+            }).then(function () {
+                lastSaved = value;
+                input.value = value;
+                input.classList.remove('is-saving');
+                input.classList.add('is-saved');
+                window.setTimeout(function () {
+                    input.classList.remove('is-saved');
+                }, 1500);
+            }).catch(function () {
+                input.classList.remove('is-saving');
+                input.classList.add('is-error');
+                input.value = lastSaved;
+                window.setTimeout(function () {
+                    input.classList.remove('is-error');
+                }, 2000);
+            });
+        }
+
+        input.addEventListener('blur', saveField);
+        input.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                input.blur();
+            }
+        });
+    }
+
     document.querySelectorAll('.estimateCopyUrlBtn').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var url = btn.getAttribute('data-url');
@@ -489,53 +562,26 @@ if ($activeTab === 'accepted') {
     });
 
     document.querySelectorAll('.estimateListPhoneInput').forEach(function (input) {
-        var lastSaved = input.value;
-
-        function savePhone() {
-            var id = input.getAttribute('data-id');
-            var phone = input.value.trim();
-
-            if (phone === lastSaved) {
-                return;
-            }
-
-            input.classList.remove('is-saved', 'is-error');
-            input.classList.add('is-saving');
-
-            fetch('api/update_list_phone.php', {
+        bindListFieldSave(input, function (id, value) {
+            return fetch('api/update_list_phone.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: id, phone: phone })
-            }).then(function (response) {
-                return response.json().then(function (data) {
-                    if (!response.ok) {
-                        throw new Error(data.error || 'Save failed');
-                    }
-                    return data;
-                });
-            }).then(function () {
-                lastSaved = phone;
-                input.classList.remove('is-saving');
-                input.classList.add('is-saved');
-                window.setTimeout(function () {
-                    input.classList.remove('is-saved');
-                }, 1500);
-            }).catch(function () {
-                input.classList.remove('is-saving');
-                input.classList.add('is-error');
-                input.value = lastSaved;
-                window.setTimeout(function () {
-                    input.classList.remove('is-error');
-                }, 2000);
+                body: JSON.stringify({ id: id, phone: value })
             });
-        }
+        });
+    });
 
-        input.addEventListener('blur', savePhone);
-        input.addEventListener('keydown', function (event) {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                input.blur();
-            }
+    document.querySelectorAll('.estimateListProjectOwnerInput, .estimateListProjectTypeInput').forEach(function (input) {
+        bindListFieldSave(input, function (id, value) {
+            return fetch('api/update_list_fields.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: id,
+                    field: input.getAttribute('data-field'),
+                    value: value
+                })
+            });
         });
     });
 

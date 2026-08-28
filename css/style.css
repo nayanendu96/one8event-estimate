@@ -46,12 +46,13 @@ a {text-decoration:none;}
 }
 .hdRow>div {
   width: calc(100% / 3);
-  padding: 10px;
+  padding: 8px 10px;
   font-weight: bold;
   font-size: 24px;
 }
 .hdClm02 {
   text-align: center;
+  min-width: 0;
 }
 .hdClm01 {
   text-align: left;
@@ -59,6 +60,23 @@ a {text-decoration:none;}
 }
 .hdClm03 {
   text-align: right;
+}
+.companyBrand {
+  text-align: center;
+  line-height: 1.25;
+}
+.companyBrandTitle {
+  font-size: 16px;
+  font-weight: bold;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+.companyBrandAddress {
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 1.4;
+  text-transform: none;
 }
 .rateToggle {
   display: inline-flex;
@@ -335,6 +353,7 @@ button.estimateActionBtn {
   background: #ff5400;
   color: #ffffff;
 }
+.estimateListTextInput,
 .estimateListPhoneInput {
   width: 120px;
   max-width: 100%;
@@ -343,18 +362,26 @@ button.estimateActionBtn {
   font-size: 13px;
   border-radius: 3px;
 }
+.estimateListProjectOwnerInput,
+.estimateListProjectTypeInput {
+  width: 160px;
+}
+.estimateListTextInput:focus,
 .estimateListPhoneInput:focus {
   border-color: #0066ff;
   outline: none;
 }
+.estimateListTextInput.is-saving,
 .estimateListPhoneInput.is-saving {
   border-color: #999;
   background: #f9f9f9;
 }
+.estimateListTextInput.is-saved,
 .estimateListPhoneInput.is-saved {
   border-color: #4bae4f;
   background: #effff0;
 }
+.estimateListTextInput.is-error,
 .estimateListPhoneInput.is-error {
   border-color: #d93025;
   background: #fff5f5;
@@ -580,6 +607,10 @@ span.tclr02 {
   padding: 4px 5px;
   font-size: 14px;
   vertical-align: middle;
+}
+.hData tr th {
+  white-space: nowrap;
+  width: 18%;
 }
 .hData .txtfld {
   font-size: 15px;
@@ -1013,6 +1044,34 @@ th.amount-value.estimate-grand-total {
 
   .no-print {
     display: none !important;
+  }
+
+  .companyBrandTitle {
+    font-size: 15px !important;
+  }
+
+  .companyBrandAddress {
+    font-size: 9px !important;
+  }
+
+  .hdRow {
+    align-items: center;
+  }
+
+  .hdRow>div {
+    width: auto;
+  }
+
+  .hdClm01 {
+    flex: 0 0 20%;
+  }
+
+  .hdClm02 {
+    flex: 1 1 60%;
+  }
+
+  .hdClm03 {
+    flex: 0 0 20%;
   }
 }
 

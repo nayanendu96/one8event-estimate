@@ -23,3 +23,31 @@
 .no-print {
   display: none !important;
 }
+
+.companyBrandTitle {
+  font-size: 15px !important;
+}
+
+.companyBrandAddress {
+  font-size: 9px !important;
+}
+
+.hdRow {
+  align-items: center;
+}
+
+.hdRow>div {
+  width: auto;
+}
+
+.hdClm01 {
+  flex: 0 0 20%;
+}
+
+.hdClm02 {
+  flex: 1 1 60%;
+}
+
+.hdClm03 {
+  flex: 0 0 20%;
+}
