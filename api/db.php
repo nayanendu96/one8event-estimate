@@ -453,7 +453,7 @@ function estimate_workflow_status_label(string $status): string
 function estimate_company_brand_html(): string
 {
     return '<div class="companyBrand">'
-        . '<div class="companyBrandTitle"><span class="tclr01">WOAN</span> <span class="tclr02">EIGHT</span> EVENT PRIVATE LIMITED</div>'
+        . '<div class="companyBrandTitle"><span class="">WOAN</span> <span class="">EIGHT</span> EVENT PRIVATE LIMITED</div>'
         . '<div class="companyBrandAddress">'
         . '<div>GE-171, Rajdanga Main Road, Sector G, East Kolkata Twp, Kolkata, West Bengal 700107</div>'
         . '<div>Landline: +91 3365982843 &nbsp; Phone: +91 9800821100</div>'
