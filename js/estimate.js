@@ -2261,7 +2261,7 @@
             return;
         }
 
-        if (!hideFinancials && appConfig.enableRateToggle !== false) {
+        if (appConfig.enableRateToggle !== false) {
             document.querySelectorAll('.rateToggleBtn').forEach(function (button) {
                 button.addEventListener('click', function () {
                     if (isReadOnly()) {

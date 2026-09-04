@@ -375,8 +375,25 @@ function estimate_resolve_item_rate(
     ?array $existingItem,
     string $rateMode,
     $conn,
-    bool $freezeRates = false
+    bool $freezeRates = false,
+    bool $rateModeChanged = false
 ): string {
+    if ($rateModeChanged && !$freezeRates) {
+        $catalogItem = estimate_resolve_catalog_item($incomingItem, $conn);
+
+        if (!$catalogItem && is_array($existingItem)) {
+            $catalogItem = estimate_resolve_catalog_item($existingItem, $conn);
+        }
+
+        if ($catalogItem) {
+            $catalogRate = estimate_get_catalog_rate($catalogItem, $rateMode);
+
+            if ($catalogRate !== '') {
+                return $catalogRate;
+            }
+        }
+    }
+
     $storedRate = estimate_get_stored_item_rate($incomingItem, $existingItem, $rateMode);
 
     if ($storedRate !== '') {
@@ -501,6 +518,10 @@ function estimate_rebuild_financial_fields(array $incoming, ?array $existing, $c
     $rateMode = in_array($incomingMode, ['d2c', 'b2v'], true) ? $incomingMode : 'b2b';
     $merged['rateMode'] = $rateMode;
 
+    $existingMode = is_array($existing) && isset($existing['rateMode']) ? (string) $existing['rateMode'] : 'b2b';
+    $existingMode = in_array($existingMode, ['d2c', 'b2v'], true) ? $existingMode : 'b2b';
+    $rateModeChanged = is_array($existing) && $existingMode !== $rateMode;
+
     if (empty($merged['groups']) || !is_array($merged['groups'])) {
         $merged['groups'] = [];
     }
@@ -535,7 +556,8 @@ function estimate_rebuild_financial_fields(array $incoming, ?array $existing, $c
                 $existingItem,
                 $rateMode,
                 $conn,
-                $freezeRates
+                $freezeRates,
+                $rateModeChanged
             );
             $merged['groups'][$groupIndex]['items'][$itemIndex] = $item;
         }
