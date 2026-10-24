@@ -514,12 +514,12 @@ function estimate_match_existing_item(
 function estimate_rebuild_financial_fields(array $incoming, ?array $existing, $conn, bool $freezeRates = false): array
 {
     $merged = $incoming;
-    $incomingMode = isset($incoming['rateMode']) ? (string) $incoming['rateMode'] : 'b2b';
-    $rateMode = in_array($incomingMode, ['d2c', 'b2v'], true) ? $incomingMode : 'b2b';
+    $incomingMode = isset($incoming['rateMode']) ? (string) $incoming['rateMode'] : 'd2c';
+    $rateMode = in_array($incomingMode, ['b2b', 'b2v'], true) ? $incomingMode : 'd2c';
     $merged['rateMode'] = $rateMode;
 
-    $existingMode = is_array($existing) && isset($existing['rateMode']) ? (string) $existing['rateMode'] : 'b2b';
-    $existingMode = in_array($existingMode, ['d2c', 'b2v'], true) ? $existingMode : 'b2b';
+    $existingMode = is_array($existing) && isset($existing['rateMode']) ? (string) $existing['rateMode'] : 'd2c';
+    $existingMode = in_array($existingMode, ['b2b', 'b2v'], true) ? $existingMode : 'd2c';
     $rateModeChanged = is_array($existing) && $existingMode !== $rateMode;
 
     if (empty($merged['groups']) || !is_array($merged['groups'])) {

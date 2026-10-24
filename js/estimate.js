@@ -13,7 +13,7 @@
     var hideFinancials = isManager && !isVendorMode;
     var savedDiscount = '0';
     var GST_RATE = 0.18;
-    var rateMode = appConfig.rateMode || 'b2b';
+    var rateMode = appConfig.rateMode || 'd2c';
     var discountEditing = false;
     var isRestoring = false;
     var saveTimer = null;
@@ -702,7 +702,7 @@
                 });
             }
 
-            setRateMode(data.rateMode || (isVendorMode ? 'b2v' : 'b2b'), table, false);
+            setRateMode(data.rateMode || (isVendorMode ? 'b2v' : 'd2c'), table, false);
             if (isVendorMode) {
                 normalizeVendorRequirementRows(table);
             } else {
