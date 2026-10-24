@@ -204,7 +204,7 @@ function renderEstimateGroup(array $categories, $isManager = false)
     var estimateUpdatedAt = <?php echo json_encode($estimateUpdatedAt, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var estimateEditToken = <?php echo json_encode($editTokenFromUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
-<script src="js/estimate.js?v=7" defer></script>
+<script src="js/estimate.js?v=8" defer></script>
 
 </head>
 <body<?php
@@ -243,8 +243,8 @@ function renderEstimateGroup(array $categories, $isManager = false)
         <div class="hdRow">
             <div class="hdClm01">
                 <div class="rateToggle no-print" role="group" aria-label="Rate type">
-                    <button type="button" class="rateToggleBtn is-active" data-rate-mode="b2b">B2B</button>
-                    <button type="button" class="rateToggleBtn" data-rate-mode="d2c">B2C</button>
+                    <button type="button" class="rateToggleBtn" data-rate-mode="b2b">B2B</button>
+                    <button type="button" class="rateToggleBtn is-active" data-rate-mode="d2c">B2C</button>
                 </div>
                 <div class="estimateNav no-print">
                     <button type="button" class="estimateIconBtn is-print estimatePrintBtn" title="Print" aria-label="Print"></button>
