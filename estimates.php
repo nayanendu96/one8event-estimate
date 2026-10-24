@@ -21,7 +21,7 @@ $allEstimates = [];
 $estimates = [];
 
 $result = $conn->query(
-    'SELECT id, company_name, project_type, list_phone, workflow_status, data, grand_total, is_locked, created_at, updated_at
+    'SELECT id, company_name, list_phone, workflow_status, data, grand_total, is_locked, created_at, updated_at
      FROM estimates
      WHERE is_deleted = 0
      ORDER BY updated_at DESC'
@@ -134,7 +134,6 @@ if ($activeTab === 'accepted') {
                         <th>Company</th>
                         <th>Project Owner</th>
                         <th>Phone</th>
-                        <th>Project Type</th>
                         <th>Event Date</th>
                         <th>Grand Total</th>
                         <th>Lock</th>
@@ -148,7 +147,6 @@ if ($activeTab === 'accepted') {
                         $company = trim((string) $estimate['company_name']);
                         $projectOwner = estimate_extract_project_owner($estimate['data'] ?? '');
                         $listPhone = trim((string) ($estimate['list_phone'] ?? ''));
-                        $projectType = trim((string) $estimate['project_type']);
                         $grandTotal = (float) $estimate['grand_total'];
                         $isLocked = (int) $estimate['is_locked'] === 1;
                         $workflowStatus = estimate_workflow_status_normalize($estimate['workflow_status'] ?? 'open');
@@ -184,18 +182,6 @@ if ($activeTab === 'accepted') {
                                     value="<?php echo htmlspecialchars($listPhone, ENT_QUOTES, 'UTF-8'); ?>"
                                     placeholder="Add phone"
                                     maxlength="32"
-                                    autocomplete="off"
-                                >
-                            </td>
-                            <td>
-                                <input
-                                    type="text"
-                                    class="estimateListTextInput estimateListProjectTypeInput"
-                                    data-id="<?php echo $id; ?>"
-                                    data-field="project_type"
-                                    value="<?php echo htmlspecialchars($projectType, ENT_QUOTES, 'UTF-8'); ?>"
-                                    placeholder="Add type"
-                                    maxlength="255"
                                     autocomplete="off"
                                 >
                             </td>
@@ -571,7 +557,7 @@ if ($activeTab === 'accepted') {
         });
     });
 
-    document.querySelectorAll('.estimateListProjectOwnerInput, .estimateListProjectTypeInput').forEach(function (input) {
+    document.querySelectorAll('.estimateListProjectOwnerInput').forEach(function (input) {
         bindListFieldSave(input, function (id, value) {
             return fetch('api/update_list_fields.php', {
                 method: 'POST',

@@ -362,8 +362,7 @@ button.estimateActionBtn {
   font-size: 13px;
   border-radius: 3px;
 }
-.estimateListProjectOwnerInput,
-.estimateListProjectTypeInput {
+.estimateListProjectOwnerInput {
   width: 160px;
 }
 .estimateListTextInput:focus,
