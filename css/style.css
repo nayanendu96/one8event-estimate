@@ -1317,3 +1317,198 @@ th.amount-value.estimate-grand-total {
 .estimatesPage .estimatesTableWrap[hidden] {
   display: none;
 }
+
+.estimateCalculatorModal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+.estimateCalculatorModal.is-hidden {
+  display: none;
+}
+body.estimate-calculator-open {
+  overflow: hidden;
+}
+.estimateCalculatorBackdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+.estimateCalculatorPanel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 920px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  background: #ffffff;
+  border: 2px solid #000000;
+  border-radius: 6px;
+  padding: 16px 18px 18px;
+  box-sizing: border-box;
+}
+.estimateCalculatorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.estimateCalculatorTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+.estimateCalculatorClose {
+  border: 1px solid #000;
+  background: #fff;
+  width: 32px;
+  height: 32px;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.estimateCalculatorSummary {
+  border: 1px solid #000;
+  margin-bottom: 14px;
+}
+.estimateCalculatorSummaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #ccc;
+  font-size: 14px;
+}
+.estimateCalculatorSummaryRow:last-child {
+  border-bottom: none;
+}
+.estimateCalculatorSummaryRow--input {
+  background: #fafafa;
+}
+.estimateCalculatorSummaryRow--profit {
+  background: #effff0;
+  font-size: 16px;
+}
+.estimateCalculatorSummaryRow--profit .estimateCalculatorProfit {
+  color: #1b7a2b;
+  font-size: 18px;
+}
+.estimateCalculatorSummaryRow--profit .estimateCalculatorProfit.is-negative {
+  color: #c62828;
+}
+.estimateCalculatorLabel {
+  font-weight: bold;
+}
+.estimateCalculatorAdditionalInput {
+  width: 140px;
+  max-width: 50%;
+  text-align: right;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-family: inherit;
+  font-weight: bold;
+  box-sizing: border-box;
+}
+.estimateCalculatorAdditionalInput:focus {
+  border-color: #0066ff;
+  outline: none;
+}
+.estimateCalculatorTempB2vInput {
+  width: 88px;
+  max-width: 100%;
+  text-align: right;
+  font-size: 12px;
+  border: 1px solid #c62828;
+  padding: 3px 5px;
+  border-radius: 3px;
+  font-family: inherit;
+  font-weight: bold;
+  box-sizing: border-box;
+  background: #fff;
+}
+.estimateCalculatorTempB2vInput:focus {
+  border-color: #0066ff;
+  outline: none;
+}
+.estimateCalculatorMissingWrap {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #c62828;
+  background: #fff5f5;
+  font-size: 13px;
+}
+.estimateCalculatorMissingWrap.is-hidden {
+  display: none;
+}
+.estimateCalculatorMissingTitle {
+  margin: 0 0 8px;
+  font-weight: bold;
+}
+.estimateCalculatorMissingList {
+  margin: 0;
+  padding-left: 20px;
+}
+.estimateCalculatorMissingList li {
+  list-style-type: disc;
+  margin: 4px 0;
+}
+.estimateCalculatorTable tr.is-missing-b2v td {
+  background: #fff8f8;
+}
+.estimateCalculatorTable tr.is-missing-b2v td:first-child {
+  font-weight: bold;
+}
+.estimateCalculatorDetailWrap {
+  overflow-x: auto;
+  margin-bottom: 14px;
+  border: 1px solid #000;
+}
+.estimateCalculatorTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.estimateCalculatorTable th,
+.estimateCalculatorTable td {
+  border: 1px solid #ccc;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.estimateCalculatorTable thead th {
+  background: #ff5400;
+  color: #fff;
+  white-space: nowrap;
+}
+.estimateCalculatorTable td:nth-child(n+4),
+.estimateCalculatorTable th:nth-child(n+4) {
+  text-align: right;
+  white-space: nowrap;
+}
+.estimateCalculatorActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.estimateCalculatorEmptyNote {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  background: #fff8e6;
+  border: 1px solid #e6c200;
+  font-size: 13px;
+}
+.estimateCalculatorEmptyNote.is-hidden {
+  display: none;
+}

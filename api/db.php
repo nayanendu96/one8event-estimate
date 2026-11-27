@@ -562,6 +562,33 @@ function estimate_parse_event_date_ymd($value): string
     return '';
 }
 
+function estimate_sort_estimates_by_event_date(array $estimates): array
+{
+    usort($estimates, function (array $a, array $b): int {
+        $aYmd = estimate_parse_event_date_ymd(estimate_extract_event_date($a['data'] ?? ''));
+        $bYmd = estimate_parse_event_date_ymd(estimate_extract_event_date($b['data'] ?? ''));
+
+        if ($aYmd === $bYmd) {
+            $aUpdated = (string) ($a['updated_at'] ?? '');
+            $bUpdated = (string) ($b['updated_at'] ?? '');
+
+            return strcmp($bUpdated, $aUpdated);
+        }
+
+        if ($aYmd === '') {
+            return 1;
+        }
+
+        if ($bYmd === '') {
+            return -1;
+        }
+
+        return strcmp($bYmd, $aYmd);
+    });
+
+    return $estimates;
+}
+
 function estimate_format_event_date($value): string
 {
     $ymd = estimate_parse_event_date_ymd($value);
