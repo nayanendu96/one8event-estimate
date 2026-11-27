@@ -4,6 +4,7 @@ require_once __DIR__ . '/api/auth.php';
 require_once __DIR__ . '/api/estimate_sanitize.php';
 
 $isManager = estimate_is_manager();
+$isAdmin = estimate_is_admin();
 
 $conn = estimate_db_connect();
 
@@ -177,7 +178,7 @@ function renderEstimateGroup(array $categories, $isManager = false)
 <meta name="viewport" content="width=device-width, initial-scale=0.666667, maximum-scale=0.666667, user-scalable=0">
 <meta name="viewport" content="width=device-width">
 
-<link href="css/style.css?v=6" rel="stylesheet" type="text/css" />
+<link href="css/style.css?v=7" rel="stylesheet" type="text/css" />
 <link href="css/print.css" rel="stylesheet" media="print" />
 <style media="print">
   .frmTable table {
@@ -199,12 +200,13 @@ function renderEstimateGroup(array $categories, $isManager = false)
     var estimateData = <?php echo json_encode($estimateData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var estimateLocked = <?php echo $estimateLocked ? 'true' : 'false'; ?>;
     var estimateIsManager = <?php echo $isManager ? 'true' : 'false'; ?>;
+    var estimateIsAdmin = <?php echo $isAdmin ? 'true' : 'false'; ?>;
     var estimateAppBase = <?php echo json_encode(estimate_app_base_path(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var estimateSpectator = <?php echo ($isSpectator || $estimateLocked) ? 'true' : 'false'; ?>;
     var estimateUpdatedAt = <?php echo json_encode($estimateUpdatedAt, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var estimateEditToken = <?php echo json_encode($editTokenFromUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
-<script src="js/estimate.js?v=8" defer></script>
+<script src="js/estimate.js?v=10" defer></script>
 
 </head>
 <body<?php
@@ -258,6 +260,9 @@ function renderEstimateGroup(array $categories, $isManager = false)
                     <?php endif; ?>
                     <?php if ($estimateId !== '') : ?>
                     <button type="button" class="estimateActionBtn estimateCreateVendorBtn no-print">Create Vendor Requirement</button>
+                    <?php endif; ?>
+                    <?php if ($isAdmin) : ?>
+                    <button type="button" class="estimateActionBtn estimateCalculatorBtn no-print">Calculator</button>
                     <?php endif; ?>
                     <?php if (!$isManager) : ?>
                     <a class="estimateActionBtn" href="index.php">New Estimate</a>
@@ -491,6 +496,60 @@ function renderEstimateGroup(array $categories, $isManager = false)
     </div>
     </div>
 </footer>
+
+<?php if ($isAdmin) : ?>
+<div class="estimateCalculatorModal no-print is-hidden" id="estimateCalculatorModal" role="dialog" aria-modal="true" aria-labelledby="estimateCalculatorTitle" aria-hidden="true">
+    <div class="estimateCalculatorBackdrop" data-calculator-close tabindex="-1"></div>
+    <div class="estimateCalculatorPanel">
+        <div class="estimateCalculatorHeader">
+            <h2 class="estimateCalculatorTitle" id="estimateCalculatorTitle">Profit calculator</h2>
+            <button type="button" class="estimateCalculatorClose" data-calculator-close aria-label="Close">&times;</button>
+        </div>
+        <p class="estimateCalculatorEmptyNote is-hidden">Add priced line items to see profit.</p>
+        <div class="estimateCalculatorSummary">
+            <div class="estimateCalculatorSummaryRow">
+                <span class="estimateCalculatorLabel">Line total (revenue)</span>
+                <span class="estimateCalculatorValue estimateCalculatorRevenue">0</span>
+            </div>
+            <div class="estimateCalculatorSummaryRow">
+                <span class="estimateCalculatorLabel">B2V cost total</span>
+                <span class="estimateCalculatorValue estimateCalculatorB2vCost">0</span>
+            </div>
+            <div class="estimateCalculatorSummaryRow estimateCalculatorSummaryRow--input">
+                <label class="estimateCalculatorLabel" for="estimateCalculatorAdditional">Additional cost</label>
+                <input type="text" id="estimateCalculatorAdditional" class="estimateCalculatorAdditionalInput estimateCalculatorField" value="0" inputmode="decimal" autocomplete="off">
+            </div>
+            <div class="estimateCalculatorSummaryRow estimateCalculatorSummaryRow--profit">
+                <span class="estimateCalculatorLabel">Estimated profit</span>
+                <span class="estimateCalculatorValue estimateCalculatorProfit">0</span>
+            </div>
+        </div>
+        <div class="estimateCalculatorMissingWrap is-hidden">
+            <p class="estimateCalculatorMissingTitle">These lines have no B2V rate in the chart — enter a temporary rate in the table below (session only), or add cost under Additional cost:</p>
+            <ul class="estimateCalculatorMissingList"></ul>
+        </div>
+        <div class="estimateCalculatorDetailWrap">
+            <table class="estimateCalculatorTable">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Unit</th>
+                        <th>Qty</th>
+                        <th>B2V / temp. rate</th>
+                        <th>Line cost</th>
+                        <th>Line revenue</th>
+                    </tr>
+                </thead>
+                <tbody class="estimateCalculatorTableBody"></tbody>
+            </table>
+        </div>
+        <div class="estimateCalculatorActions">
+            <button type="button" class="estimateActionBtn estimateCalculatorRecalcBtn">Recalculate</button>
+            <button type="button" class="estimateActionBtn" data-calculator-close>Close</button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 
 </body>

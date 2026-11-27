@@ -45,6 +45,10 @@ foreach ($allEstimates as $estimateRow) {
     }
 }
 
+if ($activeTab === 'accepted' || $activeTab === 'rejected') {
+    $estimates = estimate_sort_estimates_by_event_date($estimates);
+}
+
 $conn->close();
 $estimatesPageUrl = 'estimates.php';
 $todayIst = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('Y-m-d');

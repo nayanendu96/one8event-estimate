@@ -10,6 +10,7 @@
     var saveEnabled = appConfig.enableSave !== false;
     var isLocked = !!window.estimateLocked;
     var isManager = !!window.estimateIsManager;
+    var isAdmin = !!window.estimateIsAdmin;
     var hideFinancials = isManager && !isVendorMode;
     var savedDiscount = '0';
     var GST_RATE = 0.18;
@@ -2062,6 +2063,359 @@
         return '';
     }
 
+    var CALCULATOR_COST_PADDING = 1.15;
+    var calculatorSessionAdditionalCost = 0;
+    var calculatorSessionTempB2v = {};
+
+    function getCalculatorRowKey(row) {
+        if (!row._rowId) {
+            row._rowId = generateRowId();
+        }
+
+        return row._rowId;
+    }
+
+    function getCatalogB2vRateForRow(row) {
+        return getB2vRateForRow(row);
+    }
+
+    function getEffectiveB2vRateForCalculator(row) {
+        var key = getCalculatorRowKey(row);
+        var temp = calculatorSessionTempB2v[key];
+
+        if (temp !== undefined && temp !== null && String(temp).trim() !== '') {
+            return String(temp).trim();
+        }
+
+        return getCatalogB2vRateForRow(row);
+    }
+
+    function getCalculatorAdditionalCost() {
+        var input = document.querySelector('.estimateCalculatorAdditionalInput');
+
+        if (!input) {
+            return calculatorSessionAdditionalCost;
+        }
+
+        return parseAmount(input.value);
+    }
+
+    function calculatorLineHasValues(row) {
+        var fields = getRowAllFields(row);
+        var name = fields.name ? String(fields.name.value || '').trim() : '';
+        var sqft = fields.sqft ? String(fields.sqft.value || '').trim() : '';
+        var qty = fields.qty ? String(fields.qty.value || '').trim() : '';
+        var rate = fields.rate ? String(fields.rate.value || '').trim() : '';
+
+        return name !== '' || sqft !== '' || qty !== '' || rate !== '';
+    }
+
+    function calculateCalculatorLineCost(row) {
+        if (!calculatorLineHasValues(row)) {
+            return 0;
+        }
+
+        var fields = getRowAllFields(row);
+        var sqftInput = fields.sqft;
+        var qtyInput = fields.qty;
+
+        if (!sqftInput || !qtyInput) {
+            return 0;
+        }
+
+        var b2vRate = parseAmount(getEffectiveB2vRateForCalculator(row));
+
+        if (b2vRate <= 0) {
+            return 0;
+        }
+
+        var sqft = parseAmountOrDefault(sqftInput.value, 1);
+        var qty = parseAmountOrDefault(qtyInput.value, 1);
+
+        return sqft * qty * b2vRate;
+    }
+
+    function buildCalculatorSnapshot(table) {
+        var lines = [];
+        var catalogCost = 0;
+
+        table.querySelectorAll('tbody.estimate-group').forEach(function (group) {
+            group.querySelectorAll('tr.item-row').forEach(function (row) {
+                if (!calculatorLineHasValues(row)) {
+                    return;
+                }
+
+                calculateRowAmount(row);
+
+                var fields = getRowAllFields(row);
+                var rowKey = getCalculatorRowKey(row);
+                var catalogB2vRate = getCatalogB2vRateForRow(row);
+                var effectiveB2vRate = getEffectiveB2vRateForCalculator(row);
+                var missingB2v = parseAmount(catalogB2vRate) <= 0;
+                var lineRevenue = getRowAmount(row);
+                var lineCost = calculateCalculatorLineCost(row);
+
+                catalogCost += lineCost;
+
+                lines.push({
+                    rowKey: rowKey,
+                    name: fields.name ? String(fields.name.value || '').trim() : '',
+                    unit: fields.sqft ? String(fields.sqft.value || '').trim() : '',
+                    qty: fields.qty ? String(fields.qty.value || '').trim() : '',
+                    catalogB2vRate: catalogB2vRate,
+                    effectiveB2vRate: effectiveB2vRate,
+                    missingB2v: missingB2v,
+                    lineCost: lineCost,
+                    lineRevenue: lineRevenue
+                });
+            });
+        });
+
+        var totals = calculateEstimateTotals(table);
+
+        return {
+            lines: lines,
+            revenue: totals.estimateTotal,
+            catalogCost: catalogCost
+        };
+    }
+
+    function applyCalculatorSummary(modal, snapshot) {
+        var additionalCost = getCalculatorAdditionalCost();
+        var effectiveCost = (snapshot.catalogCost + additionalCost) * CALCULATOR_COST_PADDING;
+        var profit = snapshot.revenue - effectiveCost;
+        var hasPricedLines = snapshot.lines.some(function (line) {
+            return line.lineRevenue > 0 || line.lineCost > 0;
+        });
+
+        calculatorSessionAdditionalCost = additionalCost;
+
+        var revenueEl = modal.querySelector('.estimateCalculatorRevenue');
+        var b2vCostEl = modal.querySelector('.estimateCalculatorB2vCost');
+        var profitEl = modal.querySelector('.estimateCalculatorProfit');
+        var emptyNote = modal.querySelector('.estimateCalculatorEmptyNote');
+
+        if (revenueEl) {
+            revenueEl.textContent = formatAmount(snapshot.revenue);
+        }
+
+        if (b2vCostEl) {
+            b2vCostEl.textContent = formatAmount(snapshot.catalogCost);
+        }
+
+        if (profitEl) {
+            profitEl.textContent = formatAmount(profit);
+            profitEl.classList.toggle('is-negative', profit < 0);
+        }
+
+        if (emptyNote) {
+            emptyNote.classList.toggle('is-hidden', hasPricedLines);
+        }
+    }
+
+    function renderCalculatorMissingList(modal, snapshot) {
+        var wrap = modal.querySelector('.estimateCalculatorMissingWrap');
+        var listEl = modal.querySelector('.estimateCalculatorMissingList');
+
+        if (!wrap || !listEl) {
+            return;
+        }
+
+        var missing = snapshot.lines.filter(function (line) {
+            return line.missingB2v;
+        });
+
+        if (!missing.length) {
+            wrap.classList.add('is-hidden');
+            listEl.innerHTML = '';
+            return;
+        }
+
+        wrap.classList.remove('is-hidden');
+        listEl.innerHTML = missing.map(function (line) {
+            var label = line.name !== '' ? line.name : '(Unnamed item)';
+            return '<li>' + escapeHtml(label) + '</li>';
+        }).join('');
+    }
+
+    function renderCalculatorTableBody(modal, snapshot) {
+        var tbody = modal.querySelector('.estimateCalculatorTableBody');
+
+        if (!tbody) {
+            return;
+        }
+
+        var html = '';
+
+        snapshot.lines.forEach(function (line) {
+            var rowClass = line.missingB2v ? ' class="is-missing-b2v"' : '';
+            var b2vCell = '';
+
+            if (line.missingB2v) {
+                var tempValue = calculatorSessionTempB2v[line.rowKey] !== undefined
+                    ? escapeAttr(String(calculatorSessionTempB2v[line.rowKey]))
+                    : '';
+                b2vCell =
+                    '<input type="text" class="estimateCalculatorTempB2vInput estimateCalculatorField" ' +
+                    'data-row-key="' + escapeAttr(line.rowKey) + '" ' +
+                    'value="' + tempValue + '" placeholder="Temp rate" inputmode="decimal" autocomplete="off">';
+            } else {
+                b2vCell = escapeHtml(line.effectiveB2vRate !== '' ? line.effectiveB2vRate : '—');
+            }
+
+            html +=
+                '<tr data-row-key="' + escapeAttr(line.rowKey) + '"' + rowClass + '>' +
+                    '<td>' + escapeHtml(line.name || '—') + '</td>' +
+                    '<td>' + escapeHtml(line.unit || '—') + '</td>' +
+                    '<td>' + escapeHtml(line.qty || '—') + '</td>' +
+                    '<td>' + b2vCell + '</td>' +
+                    '<td class="estimateCalculatorLineCost">' + escapeHtml(formatAmount(line.lineCost)) + '</td>' +
+                    '<td>' + escapeHtml(formatAmount(line.lineRevenue)) + '</td>' +
+                '</tr>';
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function syncCalculatorLineCosts(modal, snapshot) {
+        snapshot.lines.forEach(function (line) {
+            var row = modal.querySelector('tr[data-row-key="' + line.rowKey + '"]');
+
+            if (!row) {
+                return;
+            }
+
+            var costCell = row.querySelector('.estimateCalculatorLineCost');
+
+            if (costCell) {
+                costCell.textContent = formatAmount(line.lineCost);
+            }
+        });
+    }
+
+    function updateProfitCalculatorTotals(table) {
+        var modal = document.getElementById('estimateCalculatorModal');
+
+        if (!modal || !table) {
+            return;
+        }
+
+        var snapshot = buildCalculatorSnapshot(table);
+
+        applyCalculatorSummary(modal, snapshot);
+        renderCalculatorMissingList(modal, snapshot);
+        syncCalculatorLineCosts(modal, snapshot);
+    }
+
+    function renderProfitCalculator(table) {
+        var modal = document.getElementById('estimateCalculatorModal');
+
+        if (!modal || !table) {
+            return;
+        }
+
+        var snapshot = buildCalculatorSnapshot(table);
+
+        applyCalculatorSummary(modal, snapshot);
+        renderCalculatorMissingList(modal, snapshot);
+        renderCalculatorTableBody(modal, snapshot);
+    }
+
+    function closeProfitCalculator() {
+        var modal = document.getElementById('estimateCalculatorModal');
+
+        if (!modal) {
+            return;
+        }
+
+        modal.classList.add('is-hidden');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('estimate-calculator-open');
+    }
+
+    function openProfitCalculator(table) {
+        var modal = document.getElementById('estimateCalculatorModal');
+
+        if (!modal || !table) {
+            return;
+        }
+
+        var additionalInput = modal.querySelector('.estimateCalculatorAdditionalInput');
+
+        if (additionalInput) {
+            additionalInput.readOnly = false;
+            additionalInput.disabled = false;
+            additionalInput.value = calculatorSessionAdditionalCost > 0
+                ? String(calculatorSessionAdditionalCost)
+                : '0';
+        }
+
+        renderProfitCalculator(table);
+        modal.classList.remove('is-hidden');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('estimate-calculator-open');
+    }
+
+    function bindProfitCalculator(table) {
+        if (!isAdmin) {
+            return;
+        }
+
+        var modal = document.getElementById('estimateCalculatorModal');
+        var openBtn = document.querySelector('.estimateCalculatorBtn');
+
+        if (!modal || !openBtn) {
+            return;
+        }
+
+        openBtn.addEventListener('click', function () {
+            openProfitCalculator(table);
+        });
+
+        modal.querySelectorAll('[data-calculator-close]').forEach(function (el) {
+            el.addEventListener('click', function () {
+                closeProfitCalculator();
+            });
+        });
+
+        var recalcBtn = modal.querySelector('.estimateCalculatorRecalcBtn');
+
+        if (recalcBtn) {
+            recalcBtn.addEventListener('click', function () {
+                renderProfitCalculator(table);
+            });
+        }
+
+        var additionalInput = modal.querySelector('.estimateCalculatorAdditionalInput');
+
+        if (additionalInput) {
+            additionalInput.addEventListener('input', function () {
+                updateProfitCalculatorTotals(table);
+            });
+        }
+
+        modal.addEventListener('input', function (event) {
+            if (!event.target.matches('.estimateCalculatorTempB2vInput')) {
+                return;
+            }
+
+            var rowKey = event.target.getAttribute('data-row-key');
+
+            if (!rowKey) {
+                return;
+            }
+
+            calculatorSessionTempB2v[rowKey] = event.target.value;
+            updateProfitCalculatorTotals(table);
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && !modal.classList.contains('is-hidden')) {
+                closeProfitCalculator();
+            }
+        });
+    }
+
     function collectVendorRequirementPayload(table) {
         var state = collectState(table);
         var groups = [];
@@ -2203,6 +2557,11 @@
             input.readOnly = readOnly;
         });
 
+        document.querySelectorAll('.estimateCalculatorField').forEach(function (input) {
+            input.readOnly = false;
+            input.disabled = false;
+        });
+
         document.querySelectorAll('.categorySelect').forEach(function (select) {
             select.disabled = readOnly;
         });
@@ -2278,6 +2637,7 @@
         applyState(estimateData, table);
         resizeAllItemNameFields(table);
         setLockedUI(isLocked);
+        bindProfitCalculator(table);
 
         table.addEventListener('change', function (event) {
             if (isReadOnly()) {
